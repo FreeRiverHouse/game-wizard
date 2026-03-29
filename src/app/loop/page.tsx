@@ -10,7 +10,6 @@ export default function LoopPage() {
   const [objective, setObjective] = useState('')
   const [targetBuilder, setTargetBuilder] = useState('')
   const [autoCommit, setAutoCommit] = useState(false)
-  const [useLocalAI, setUseLocalAI] = useState(false)
   const [maxIterations, setMaxIterations] = useState(1)
   const [continuous, setContinuous] = useState(false)
   const [status, setStatus] = useState<LoopState>('idle')
@@ -57,7 +56,6 @@ export default function LoopPage() {
         objective,
         targetBuilder: targetBuilder || undefined,
         autoCommit,
-        useLocalAI,
         maxIterations: continuous ? 999 : maxIterations,
         continuous,
       }),
@@ -133,28 +131,6 @@ export default function LoopPage() {
               }} />
             </div>
             AUTO-COMMIT
-          </label>
-
-          {/* Use Local AI toggle */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-mid)', whiteSpace: 'nowrap' }}>
-            <div
-              onClick={() => setUseLocalAI(v => !v)}
-              style={{
-                width: 28, height: 16, borderRadius: 8,
-                background: useLocalAI ? 'rgba(0,212,255,0.2)' : 'rgba(0,0,0,0.4)',
-                border: `1px solid ${useLocalAI ? 'var(--cyan)' : 'var(--border-subtle)'}`,
-                position: 'relative', cursor: 'pointer', transition: 'all 0.2s',
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: 2,
-                left: useLocalAI ? 13 : 2,
-                width: 10, height: 10, borderRadius: '50%',
-                background: useLocalAI ? 'var(--cyan)' : 'var(--text-dim)',
-                transition: 'left 0.2s',
-              }} />
-            </div>
-            ⚡ LOCAL AI
           </label>
         </div>
 

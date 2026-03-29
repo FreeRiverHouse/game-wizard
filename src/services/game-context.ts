@@ -73,7 +73,7 @@ export function getGameStats(gameId: string): {
 
 export function getGamePaths(game?: GameRow) {
   const g = game || getActiveGame()
-  const gamePath = g?.path || process.env.GAME_PATH || '/Users/mattiapetrucciani/pizza-gelato-rush'
+  const gamePath = g?.path || process.env.GAME_PATH || '/Volumes/SSD-FRH-1/Free-River-House/Games/Pizza-Gelato/PizzaGelato-LA-URP'
   return {
     gamePath,
     referenceImage: g?.reference_image || path.join(gamePath, 'references/fly-ride-reference.png'),

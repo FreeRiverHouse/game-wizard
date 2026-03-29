@@ -66,8 +66,8 @@ INSERT OR IGNORE INTO games (id, name, path, build_script, screenshot_script, re
 VALUES (
   'pgr',
   'Pizza Gelato Rush',
-  '/Users/mattiapetrucciani/pizza-gelato-rush',
+  '/Volumes/SSD-FRH-1/Free-River-House/Games/Pizza-Gelato/PizzaGelato-LA-URP',
   'build.sh',
   'screenshot.sh',
-  '/Users/mattiapetrucciani/pizza-gelato-rush/references/fly-ride-reference.png'
+  '/Volumes/SSD-FRH-1/Free-River-House/Games/Pizza-Gelato/PizzaGelato-LA-URP/references/fly-ride-reference.png'
 );

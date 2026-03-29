@@ -1,6 +1,8 @@
 import path from 'node:path'
 
-export const GAME_PATH = process.env.GAME_PATH || '/Users/mattiapetrucciani/pizza-gelato-rush'
+// Path-based constants are deprecated — use getGamePaths() from services/game-context instead.
+// Kept only as last-resort fallback for callers that don't yet pass a game path explicitly.
+export const GAME_PATH = process.env.GAME_PATH || '/Volumes/SSD-FRH-1/Free-River-House/Games/Pizza-Gelato/PizzaGelato-LA-URP'
 export const REFERENCE_IMAGE = process.env.REFERENCE_IMAGE || path.join(GAME_PATH, 'references/fly-ride-reference.png')
 export const SCREENSHOTS_DIR = path.join(GAME_PATH, 'screenshots')
 export const BUILDERS_DIR = path.join(GAME_PATH, 'Assets/Scripts/Builders')

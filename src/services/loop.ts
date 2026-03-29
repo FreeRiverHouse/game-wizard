@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { runBuild, runScreenshot, runGitCommit, runGitDiff } from './shell'
-import { analyzeScreenshot, analyzeScreenshotLocal, generateCodeChanges, generateCodeChangesLocal, generatePMSummary } from './ai'
-import { startMLXServer, stopMLXServer, VISION_SERVER, CODER_SERVER } from './mlx-manager'
+import { analyzeScreenshotLocal, generateCodeChangesLocal, generatePMSummary } from './ai'
+import { ensureModel, releaseModel, setOrchestratorLogger } from './model-orchestrator'
 import { getDb } from './db'
 import { getActiveGameId, getGamePaths } from './game-context'
 import type { LoopState, LoopOptions, AnalysisResult, CodeChange } from '@/lib/types'
@@ -91,8 +91,6 @@ function resolveFile(fileName: string, buildersDir: string, coreDir: string): st
  */
 async function runOneIteration(iterNum: number, options: LoopOptions): Promise<boolean> {
   const signal = _abortController!.signal
-  // Copia mutabile per gestire fallback local→Claude runtime
-  let useLocal = options.useLocalAI ?? false
 
   // ── Paths dinamici dal gioco attivo ──
   const gameId = getActiveGameId()
@@ -126,7 +124,7 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
   emit('screenshot', ssResult.screenshotPath || '')
 
   db.prepare('UPDATE iterations SET screenshot_path = ?, status = ? WHERE game_id = ? AND number = ?')
-    .run(ssResult.archivePath || ssResult.screenshotPath, 'analyzing', 'pgr', iterNum)
+    .run(ssResult.archivePath || ssResult.screenshotPath, 'analyzing', gameId, iterNum)
 
   // ── STEP 3: ANALYZE (Vision) ──────────────────────────────────────────────
   const context = [
@@ -135,39 +133,14 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
     options.targetBuilder ? `Focus builder: ${options.targetBuilder}` : '',
   ].filter(Boolean).join('\n')
 
-  if (useLocal) {
-    // ── Avvia Qwen-Vision → analizza → spegni ──
-    setState('loading_vision')
-    emit('log', '[3/5] Avvio Qwen2.5-VL-7B (vision)...')
-    try {
-      await startMLXServer(VISION_SERVER, (msg) => emit('log', msg))
-    } catch (err) {
-      emit('log', `[warn] Vision server fallita: ${(err as Error).message} — fallback Claude`)
-      useLocal = false
-    }
-  }
-
-  if (!useLocal) {
-    setState('analyzing')
-    emit('log', '[3/5] AI analyzing screenshot vs reference (Claude)...')
-  } else {
-    setState('analyzing')
-    emit('log', '[3/5] Confronto screenshot vs reference con Qwen-Vision...')
-  }
-
-  if (useLocal) {
-    _lastAnalysis = await analyzeScreenshotLocal(
-      ssResult.screenshotPath!, referenceImage, context,
-      `http://127.0.0.1:${VISION_SERVER.port}`, VISION_SERVER.model
-    )
-    if (signal.aborted) { await stopMLXServer(VISION_SERVER.port); return false }
-    emit('log', `[3/5] Spegnimento Qwen-Vision...`)
-    await stopMLXServer(VISION_SERVER.port)
-    emit('log', `[3/5] Qwen-Vision spento. RAM liberata.`)
-  } else {
-    _lastAnalysis = await analyzeScreenshot(ssResult.screenshotPath!, referenceImage, context)
-    if (signal.aborted) return false
-  }
+  setState('loading_vision')
+  emit('log', '[3/5] Caricamento vision model...')
+  const { url: visionUrl, model: visionModel } = await ensureModel('vision')
+  setState('analyzing')
+  emit('log', '[3/5] Analisi screenshot con vision locale...')
+  _lastAnalysis = await analyzeScreenshotLocal(ssResult.screenshotPath!, referenceImage, context, visionUrl, visionModel)
+  if (signal.aborted) { await releaseModel(); return false }
+  emit('log', '[3/5] Vision done. RAM liberata al prossimo swap.')
 
   emit('log', `Analysis done (${_lastAnalysis.tokensUsed} tokens)`)
   emit('log', `Summary: ${_lastAnalysis.summary}`)
@@ -175,45 +148,29 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
   emit('analysis', JSON.stringify(_lastAnalysis))
 
   db.prepare('UPDATE iterations SET ai_analysis = ?, ai_tokens_used = ?, status = ? WHERE game_id = ? AND number = ?')
-    .run(JSON.stringify(_lastAnalysis), _lastAnalysis.tokensUsed, 'modifying', 'pgr', iterNum)
+    .run(JSON.stringify(_lastAnalysis), _lastAnalysis.tokensUsed, 'modifying', gameId, iterNum)
 
   // ── STEP 4: GENERATE CODE CHANGES (Coder) ────────────────────────────────
-  if (useLocal) {
-    setState('loading_coder')
-    emit('log', '[4/5] Avvio Qwen3-Coder-30B (coder)...')
-    try {
-      await startMLXServer(CODER_SERVER, (msg) => emit('log', msg))
-    } catch (err) {
-      emit('log', `[warn] Coder server fallito: ${(err as Error).message} — fallback Claude`)
-      useLocal = false
-    }
-  }
-
+  setState('loading_coder')
+  emit('log', '[4/5] Caricamento coder model...')
+  const { url: coderUrl, model: coderModel } = await ensureModel('coder')
   setState('modifying')
-  emit('log', useLocal
-    ? '[4/5] Generazione codice con Qwen3-Coder...'
-    : '[4/5] Generating code changes (Claude)...')
-
+  emit('log', '[4/5] Generazione codice con Qwen3-Coder...')
   const allChanges: CodeChange[] = []
   let totalTokens = _lastAnalysis.tokensUsed
 
   for (const suggestedFile of _lastAnalysis.suggestedFiles) {
-    if (signal.aborted) {
-      if (useLocal) await stopMLXServer(CODER_SERVER.port)
-      return false
-    }
+    if (signal.aborted) return false
     const actualPath = resolveFile(suggestedFile, buildersDir, coreDir)
     if (!actualPath) {
       emit('log', `File not found: ${suggestedFile} — skipping`)
       continue
     }
     const fileContent = fs.readFileSync(actualPath, 'utf-8')
-    const result = useLocal
-      ? await generateCodeChangesLocal(
-          _lastAnalysis, fileContent, suggestedFile,
-          `http://127.0.0.1:${CODER_SERVER.port}`, CODER_SERVER.model
-        )
-      : await generateCodeChanges(_lastAnalysis, fileContent, suggestedFile)
+    const result = await generateCodeChangesLocal(
+      _lastAnalysis, fileContent, suggestedFile,
+      coderUrl, coderModel
+    )
     allChanges.push(...result.changes)
     totalTokens += result.tokensUsed
     emit('log', `Generated ${result.changes.length} change(s) for ${suggestedFile}`)
@@ -224,16 +181,13 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
   const pmSummary = await generatePMSummary(
     _lastAnalysis!,
     allChanges,
-    useLocal ? `http://127.0.0.1:${CODER_SERVER.port}` : undefined,
-    useLocal ? CODER_SERVER.model : undefined,
+    coderUrl,
+    coderModel
   )
   emit('log', `PM: ${pmSummary}`)
 
-  if (useLocal) {
-    emit('log', `[4/5] Spegnimento Qwen3-Coder...`)
-    await stopMLXServer(CODER_SERVER.port)
-    emit('log', `[4/5] Qwen3-Coder spento. RAM liberata.`)
-  }
+  await releaseModel()
+  emit('log', '[4/5] Modello rilasciato.')
 
   _lastChanges = allChanges
   emit('changes', JSON.stringify(allChanges))
@@ -254,7 +208,7 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
     if (!approved) {
       emit('log', 'Changes rejected — skipping commit')
       db.prepare('UPDATE iterations SET status = ?, error = ? WHERE game_id = ? AND number = ?')
-        .run('failed', 'Changes rejected by user', 'pgr', iterNum)
+        .run('failed', 'Changes rejected by user', gameId, iterNum)
       return false
     }
   }
@@ -334,8 +288,10 @@ export async function runLoop(options: LoopOptions): Promise<void> {
   _lastChanges = []
   _abortController = new AbortController()
 
+  setOrchestratorLogger((msg) => emit('log', msg))
+
   const db = getDb()
-  const row = db.prepare('SELECT MAX(number) as maxN FROM iterations WHERE game_id = ?').get('pgr') as { maxN: number | null }
+  const row = db.prepare('SELECT MAX(number) as maxN FROM iterations WHERE game_id = ?').get(getActiveGameId()) as { maxN: number | null }
   _currentIteration = (row?.maxN || 0) + 1
 
   const maxIter = options.continuous ? Infinity : (options.maxIterations || 1)
@@ -352,7 +308,7 @@ export async function runLoop(options: LoopOptions): Promise<void> {
       _lastError = String(err)
       emit('log', `ERROR: ${_lastError}`)
       db.prepare('UPDATE iterations SET status = ?, error = ? WHERE game_id = ? AND number = ?')
-        .run('failed', _lastError, 'pgr', _currentIteration)
+        .run('failed', _lastError, getActiveGameId(), _currentIteration)
       break
     }
 
