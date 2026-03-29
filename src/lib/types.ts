@@ -57,7 +57,7 @@ export interface BuilderInfo {
 
 // ── Loop types ──
 
-export type LoopState = 'idle' | 'building' | 'screenshotting' | 'loading_vision' | 'analyzing' | 'loading_coder' | 'modifying' | 'committing'
+export type LoopState = 'idle' | 'building' | 'screenshotting' | 'loading_vision' | 'analyzing' | 'loading_coder' | 'modifying' | 'committing' | 'planning'
 
 export interface LoopStatus {
   state: LoopState
@@ -73,7 +73,14 @@ export interface LoopOptions {
   autoCommit: boolean
   targetBuilder?: string
   objective: string
-  useLocalAI?: boolean  // true = swap Qwen-Vision/Qwen-Coder, false = usa solo Claude
+  autonomous?: boolean  // true = planner genera objectives automaticamente
+}
+
+export interface PlannerResult {
+  objective: string
+  targetBuilder?: string
+  reasoning: string
+  area: 'urban' | 'flora' | 'props' | 'environment' | 'characters' | 'general'
 }
 
 // ── AI types ──

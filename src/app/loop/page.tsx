@@ -10,6 +10,7 @@ export default function LoopPage() {
   const [objective, setObjective] = useState('')
   const [targetBuilder, setTargetBuilder] = useState('')
   const [autoCommit, setAutoCommit] = useState(false)
+  const [autonomous, setAutonomous] = useState(false)
   const [maxIterations, setMaxIterations] = useState(1)
   const [continuous, setContinuous] = useState(false)
   const [status, setStatus] = useState<LoopState>('idle')
@@ -56,6 +57,7 @@ export default function LoopPage() {
         objective,
         targetBuilder: targetBuilder || undefined,
         autoCommit,
+        autonomous,
         maxIterations: continuous ? 999 : maxIterations,
         continuous,
       }),
@@ -94,13 +96,21 @@ export default function LoopPage() {
       <div className="hud-card bracket-card" style={{ padding: '18px' }}>
         <div className="hud-label" style={{ marginBottom: '12px' }}>◈ MISSION OBJECTIVE</div>
 
-        <textarea
-          value={objective}
-          onChange={e => setObjective(e.target.value)}
-          placeholder="es. migliora i portici — devono essere bianchi puri e più grandi"
-          className="hud-input"
-          style={{ height: '70px', marginBottom: '12px' }}
-        />
+        {!autonomous && (
+          <textarea
+            value={objective}
+            onChange={e => setObjective(e.target.value)}
+            placeholder="es. migliora i portici — devono essere bianchi puri e più grandi"
+            className="hud-input"
+            style={{ height: '70px', marginBottom: '12px' }}
+          />
+        )}
+
+        {autonomous && (
+          <div style={{ marginBottom: '12px', fontSize: '10px', color: 'var(--text-mid)', fontStyle: 'italic' }}>
+            Planner will auto-generate objectives
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
           <input
@@ -131,6 +141,28 @@ export default function LoopPage() {
               }} />
             </div>
             AUTO-COMMIT
+          </label>
+
+          {/* Autonomous toggle */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-mid)', whiteSpace: 'nowrap' }}>
+            <div
+              onClick={() => setAutonomous(v => !v)}
+              style={{
+                width: 28, height: 16, borderRadius: 8,
+                background: autonomous ? 'var(--cyan-dim)' : 'rgba(0,0,0,0.4)',
+                border: `1px solid ${autonomous ? 'var(--cyan-border)' : 'var(--border-subtle)'}`,
+                position: 'relative', cursor: 'pointer', transition: 'all 0.2s',
+              }}
+            >
+              <div style={{
+                position: 'absolute', top: 2,
+                left: autonomous ? 13 : 2,
+                width: 10, height: 10, borderRadius: '50%',
+                background: autonomous ? 'var(--cyan)' : 'var(--text-dim)',
+                transition: 'left 0.2s',
+              }} />
+            </div>
+            AUTONOMOUS
           </label>
         </div>
 
@@ -176,7 +208,7 @@ export default function LoopPage() {
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={startLoop}
-            disabled={isRunning || !objective.trim()}
+            disabled={isRunning || (!autonomous && !objective.trim())}
             className="btn btn-green"
           >
             {buttonLabel}

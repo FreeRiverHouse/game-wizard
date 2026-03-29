@@ -6,6 +6,7 @@ import { ensureModel, releaseModel, setOrchestratorLogger } from './model-orches
 import { getDb } from './db'
 import { getActiveGameId, getGamePaths } from './game-context'
 import type { LoopState, LoopOptions, AnalysisResult, CodeChange } from '@/lib/types'
+import { generateNextObjective } from './planner'
 
 // ── Singleton state (vive nel processo Next.js) ──
 
@@ -103,6 +104,19 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
   db.prepare(
     'INSERT INTO iterations (game_id, number, status, reference_path) VALUES (?, ?, ?, ?)'
   ).run(gameId, iterNum, 'building', referenceImage)
+
+  // ── STEP 0: PLANNING (Autonomous mode) ────────────────────────────────────────
+  if (options.autonomous === true) {
+    setState('planning')
+    emit('log', '[0/5] Planner: generazione prossimo obiettivo...')
+    const planResult = await generateNextObjective((msg) => emit('log', msg))
+    options.objective = planResult.objective
+    if (planResult.targetBuilder) options.targetBuilder = planResult.targetBuilder
+    emit('log', `[0/5] Obiettivo: ${planResult.objective} (area: ${planResult.area})`)
+    emit('log', `[0/5] Reasoning: ${planResult.reasoning}`)
+    emit('plan', JSON.stringify(planResult))
+    _objective = planResult.objective
+  }
 
   // ── STEP 1: BUILD ──────────────────────────────────────────────────────────
   setState('building')
@@ -298,10 +312,19 @@ export async function runLoop(options: LoopOptions): Promise<void> {
   emit('log', `Starting loop: ${options.continuous ? 'continuous' : `max ${maxIter} iteration(s)`}`)
 
   let itersDone = 0
+  let lastChangeCount = -1
+  let zeroChangeCount = 0
+
   while (itersDone < maxIter) {
     if (_abortController.signal.aborted) break
 
     try {
+      // Se in modalità autonomo, imposta continuous=true e objective='autonomous'
+      if (options.autonomous === true) {
+        options.continuous = true
+        options.objective = 'autonomous'
+      }
+
       const ok = await runOneIteration(_currentIteration, options)
       if (!ok || _abortController.signal.aborted) break
     } catch (err) {
@@ -310,6 +333,20 @@ export async function runLoop(options: LoopOptions): Promise<void> {
       db.prepare('UPDATE iterations SET status = ?, error = ? WHERE game_id = ? AND number = ?')
         .run('failed', _lastError, getActiveGameId(), _currentIteration)
       break
+    }
+
+    // Controllo per warning di zero changes consecutivi in modalità autonomo
+    if (options.autonomous === true) {
+      const currentChangeCount = _lastChanges.length
+      if (currentChangeCount === 0) {
+        zeroChangeCount++
+        if (zeroChangeCount >= 3 && lastChangeCount === 0) {
+          emit('log', '⚠️ WARNING: 3 iterazioni consecutive senza modifiche in modalità autonomo')
+        }
+      } else {
+        zeroChangeCount = 0
+      }
+      lastChangeCount = currentChangeCount
     }
 
     itersDone++
