@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 const NAV_ITEMS = [
+  { href: '/shop',      label: 'SHOP',      icon: '🏪' },
   { href: '/games',     label: 'GAMES',     icon: '⊞' },
   { href: '/',          label: 'DASHBOARD', icon: '◈' },
   { href: '/loop',      label: 'LOOP',      icon: '⟳' },
