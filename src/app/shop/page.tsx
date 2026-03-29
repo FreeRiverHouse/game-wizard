@@ -138,14 +138,14 @@ export default function ShopPage() {
     setPipeline({ emilio: 'ready', planner: 'idle', coder: 'idle', vision: 'idle', detail: 'Starting...', loopState: 'starting' });
     startPipelinePolling();
     try {
-      await fetch('/api/loop/start', {
+      await fetch('/api/graph/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          gameId: 'pgr',
           objective: gameDescription,
           maxIterations: 3,
-          continuous: false,
-          autoCommit: false,
+          autonomous: false,
         })
       });
     } catch (e) {
