@@ -54,7 +54,7 @@ export async function ensureModel(role: ModelRole): Promise<{ url: string; model
       case 'coder': {
         log('Loading coder model...');
         execSync(
-          `${LMS_PATH} load lmstudio-community/Qwen3-Coder-30B-A3B-Instruct-MLX-4bit --yes 2>&1`,
+          `${LMS_PATH} load qwen3-coder-30b-a3b-instruct-mlx --yes 2>&1`,
           { timeout: 120_000 }
         );
         log('Coder model loaded, waiting for server...');
@@ -65,7 +65,7 @@ export async function ensureModel(role: ModelRole): Promise<{ url: string; model
       case 'planner': {
         log('Loading planner model...');
         execSync(
-          `${LMS_PATH} load Jackrong/MLX-Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2-4bit --yes 2>&1`,
+          `${LMS_PATH} load mlx-qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2 --yes 2>&1`,
           { timeout: 120_000 }
         );
         log('Planner model loaded, waiting for server...');
