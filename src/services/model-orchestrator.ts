@@ -39,12 +39,15 @@ async function waitForPort(port: number, timeoutMs = 90_000): Promise<void> {
 export async function ensureModel(role: ModelRole): Promise<{ url: string; model: string }> {
   if (_loadedRole === role) {
     log(`Model ${role} already loaded`);
+    _phase = 'running'; _phaseDetail = `${role} ready`;
     return _getModelInfo(role);
   }
 
   if (_loadedRole !== null) {
     await releaseModel();
   }
+
+  _phase = 'loading'; _phaseDetail = `loading ${role}...`;
 
   try {
     switch (role) {
@@ -56,7 +59,7 @@ export async function ensureModel(role: ModelRole): Promise<{ url: string; model
         );
         log('Coder model loaded, waiting for server...');
         await waitForPort(1234);
-        _loadedRole = role;
+        _loadedRole = role; _phase = 'running'; _phaseDetail = 'coder ready';
         return { url: 'http://localhost:1234', model: 'qwen3-coder-30b-a3b-instruct-mlx' };
       }
       case 'planner': {
@@ -67,7 +70,7 @@ export async function ensureModel(role: ModelRole): Promise<{ url: string; model
         );
         log('Planner model loaded, waiting for server...');
         await waitForPort(1234);
-        _loadedRole = role;
+        _loadedRole = role; _phase = 'running'; _phaseDetail = 'planner ready';
         return { url: 'http://localhost:1234', model: 'mlx-qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2' };
       }
       case 'vision': {
@@ -89,6 +92,8 @@ export async function ensureModel(role: ModelRole): Promise<{ url: string; model
 export async function releaseModel(): Promise<void> {
   if (_loadedRole === null) return;
 
+  _phase = 'releasing'; _phaseDetail = `releasing ${_loadedRole}...`;
+
   try {
     switch (_loadedRole) {
       case 'coder':
@@ -105,6 +110,7 @@ export async function releaseModel(): Promise<void> {
     }
 
     _loadedRole = null;
+    _phase = 'idle'; _phaseDetail = '';
     log('Model released');
   } catch (error) {
     log(`Error releasing model: ${(error as Error).message}`);
@@ -124,4 +130,29 @@ function _getModelInfo(role: ModelRole): { url: string; model: string } {
 
 export function getLoadedModel(): ModelRole | null {
   return _loadedRole;
+}
+
+type OrchestratorPhase = 'idle' | 'loading' | 'running' | 'releasing';
+let _phase: OrchestratorPhase = 'idle';
+let _phaseDetail = '';
+
+export function getOrchestratorStatus() {
+  return {
+    loadedModel: _loadedRole,      // 'coder' | 'planner' | 'vision' | null
+    phase: _phase,                  // 'idle' | 'loading' | 'running' | 'releasing'
+    detail: _phaseDetail,           // human-readable status
+    // Convenience booleans for pipeline display
+    pipeline: {
+      gino:    'always-on',         // Gino uses claude CLI, always available
+      planner: _loadedRole === 'planner' ? _phase : 'idle',
+      coder:   _loadedRole === 'coder'   ? _phase : 'idle',
+      vision:  _loadedRole === 'vision'  ? _phase : 'idle',
+    }
+  };
+}
+
+export function setOrchestratorPhase(phase: OrchestratorPhase, detail = ''): void {
+  _phase = phase;
+  _phaseDetail = detail;
+  log(`[orchestrator] ${phase}: ${detail}`);
 }

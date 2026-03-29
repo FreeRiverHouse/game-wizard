@@ -23,6 +23,10 @@ export default function ShopPage() {
   const [isBotRunning, setIsBotRunning] = useState(false);
   const [botStep, setBotStep] = useState(0);
   const botAbortRef = useRef<boolean>(false);
+  const [pipeline, setPipeline] = useState<null | {
+    gino: string; planner: string; coder: string; vision: string; detail: string; loopState: string;
+  }>(null);
+  const pipelineTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -105,8 +109,34 @@ export default function ShopPage() {
     }
   };
 
+  const startPipelinePolling = () => {
+    if (pipelineTimerRef.current) clearInterval(pipelineTimerRef.current);
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/orchestrator/status');
+        const d = await r.json();
+        setPipeline({
+          gino:      'ready',
+          planner:   d.pipeline?.planner?.status ?? d.orchestrator?.pipeline?.planner ?? 'idle',
+          coder:     d.pipeline?.coder?.status   ?? d.orchestrator?.pipeline?.coder   ?? 'idle',
+          vision:    d.pipeline?.vision?.status  ?? d.orchestrator?.pipeline?.vision  ?? 'idle',
+          detail:    d.detail ?? d.orchestrator?.detail ?? '',
+          loopState: d.loop?.state ?? 'idle',
+        });
+        // Stop polling when loop goes back to idle after running
+        if (d.loop?.state === 'idle' && d.orchestrator?.loadedModel === null) {
+          clearInterval(pipelineTimerRef.current!);
+          pipelineTimerRef.current = null;
+        }
+      } catch { /* ignore */ }
+    };
+    poll();
+    pipelineTimerRef.current = setInterval(poll, 2000);
+  };
+
   const triggerGameCreation = async (gameDescription: string) => {
-    // Start the game wizard loop with the description as objective
+    setPipeline({ gino: 'ready', planner: 'idle', coder: 'idle', vision: 'idle', detail: 'Starting...', loopState: 'starting' });
+    startPipelinePolling();
     try {
       await fetch('/api/loop/start', {
         method: 'POST',
@@ -118,8 +148,6 @@ export default function ShopPage() {
           autoCommit: false,
         })
       });
-      // Short delay then redirect to loop page to watch it build
-      setTimeout(() => router.push('/loop'), 1500);
     } catch (e) {
       console.error('Failed to start loop:', e);
     }
@@ -353,6 +381,40 @@ export default function ShopPage() {
       {/* ── CHAT PANEL (40%) ── */}
       <div style={{ width: '40%', display: 'flex', flexDirection: 'column',
         background: '#0d0520', borderLeft: '2px solid #3d1060' }}>
+
+        {/* Pipeline status bar */}
+        {pipeline && (() => {
+          const s = (v: string) => v === 'running' ? '🟢' : v === 'loading' ? '🟡' : v === 'ready' ? '🟢' : '⚪';
+          const stages = [
+            { key: 'gino',    label: 'Gino',    model: 'Sonnet',    val: pipeline.gino },
+            { key: 'planner', label: 'Planner', model: 'Qwen3.5',   val: pipeline.planner },
+            { key: 'coder',   label: 'Coder',   model: 'Qwen-Code', val: pipeline.coder },
+            { key: 'vision',  label: 'Vision',  model: 'VL-7B',     val: pipeline.vision },
+          ];
+          return (
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid #1e0a3a', background: '#0a0118',
+              display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                {stages.map((st, i) => (
+                  <span key={st.key} style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span>{s(st.val)}</span>
+                    <span style={{ color: st.val !== 'idle' ? '#a78bfa' : '#4b5563', fontWeight: 600 }}>{st.label}</span>
+                    <span style={{ color: '#4b5563' }}>({st.model})</span>
+                    {i < stages.length - 1 && <span style={{ color: '#4b5563' }}>→</span>}
+                  </span>
+                ))}
+              </div>
+              {pipeline.detail && (
+                <div style={{ fontSize: 10, color: '#6d28d9', fontStyle: 'italic' }}>
+                  {pipeline.loopState !== 'idle' && '⚙ '}{pipeline.detail || pipeline.loopState}
+                  {pipeline.loopState !== 'idle' && (
+                    <a href="/loop" style={{ marginLeft: 8, color: '#00eeff', textDecoration: 'underline' }}>→ Watch live</a>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Header */}
         <div style={{ padding: '12px 16px', borderBottom: '1px solid #3d1060',
