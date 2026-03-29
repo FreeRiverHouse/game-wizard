@@ -1,9 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+import { execFileSync } from 'child_process'
 
 export interface ShopkeeperMessage {
-  role: 'user' | 'shopkeeper' | 'system'
+  role: 'user' | 'shopkeeper'
   content: string
   timestamp: number
 }
@@ -15,48 +13,41 @@ export interface ShopkeeperResponse {
   emotion?: 'neutral' | 'excited' | 'thinking' | 'proud'
 }
 
-let _conversationHistory: ShopkeeperMessage[] = []
+let _history: ShopkeeperMessage[] = []
 
 export async function chatWithShopkeeper(userMessage: string): Promise<ShopkeeperResponse> {
-  _conversationHistory.push({ role: 'user', content: userMessage, timestamp: Date.now() })
+  _history.push({ role: 'user', content: userMessage, timestamp: Date.now() })
+
+  const convText = _history
+    .slice(0, -1) // exclude the message just added
+    .map(m => `${m.role === 'user' ? 'User' : 'Gino'}: ${m.content}`)
+    .join('\n')
+
+  const fullPrompt = `You are Gino, a passionate Neapolitan game shop owner. Italian flair. Help customers design games.
+When you have enough game details (name, genre, mechanic), set action to "create_game".
+ALWAYS reply ONLY with valid JSON (no markdown): {"reply":"...","action":null,"gameDescription":"...","emotion":"neutral|excited|thinking|proud"}
+Keep replies short (1-3 sentences), theatrical and Neapolitan.
+
+${convText ? convText + '\n' : ''}User: ${userMessage}
+Reply with JSON:`
+
   try {
-    const systemPrompt = `You are Gino, a passionate Neapolitan game shop owner. You speak with Italian flair and help customers design video games. When you have enough details about a game idea, respond with action: create_game. Always respond ONLY with valid JSON: { "reply": "your dialog", "action": null or "create_game" or "modify_game" or "show_game", "gameDescription": "only if action is create_game", "emotion": "neutral" or "excited" or "thinking" or "proud" }. Keep replies short (1-3 sentences), theatrical and Neapolitan.`
-
-    const messages = _conversationHistory
-      .filter(msg => msg.role !== 'system')
-      .map(msg => ({
-        role: (msg.role === 'shopkeeper' ? 'assistant' : 'user') as 'user' | 'assistant',
-        content: msg.content
-      }))
-
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
-      system: systemPrompt,
-      messages,
-      max_tokens: 500,
-      temperature: 0.6
+    const raw = execFileSync('claude', ['-p', fullPrompt], {
+      encoding: 'utf8',
+      timeout: 30000,
+      env: { ...process.env }
     })
-
-    const textBlock = response.content.find(b => b.type === 'text')
-    const rawText = textBlock && 'text' in textBlock ? textBlock.text : ''
-    const cleanResult = rawText.trim()
-
-    let parsed: ShopkeeperResponse
-    try {
-      const jsonMatch = cleanResult.match(/\{[\s\S]*\}/)
-      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleanResult)
-    } catch {
-      throw new Error('Failed to parse shopkeeper JSON')
-    }
-
-    _conversationHistory.push({ role: 'shopkeeper', content: parsed.reply, timestamp: Date.now() })
+    const match = raw.match(/\{[\s\S]*\}/)
+    const parsed: ShopkeeperResponse = JSON.parse(match ? match[0] : raw.trim())
+    _history.push({ role: 'shopkeeper', content: parsed.reply, timestamp: Date.now() })
     return parsed
   } catch (error) {
-    console.error('Error in chatWithShopkeeper:', error)
-    _conversationHistory.push({ role: 'shopkeeper', content: 'Mamma mia, my brain is not working! Try again.', timestamp: Date.now() })
-    return { reply: 'Mamma mia, my brain is not working! Try again.', emotion: 'neutral' }
+    console.error('[shopkeeper] error:', error)
+    const fallback: ShopkeeperResponse = { reply: 'Mamma mia, un momento...', emotion: 'thinking' }
+    _history.push({ role: 'shopkeeper', content: fallback.reply, timestamp: Date.now() })
+    return fallback
   }
 }
 
-export function getConversationHistory(): ShopkeeperMessage[] { return _conversationHistory }
-export function resetConversation(): void { _conversationHistory = [] }
+export function getConversationHistory(): ShopkeeperMessage[] { return _history }
+export function resetConversation(): void { _history = [] }
