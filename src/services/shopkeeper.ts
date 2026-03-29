@@ -20,10 +20,10 @@ export async function chatWithShopkeeper(userMessage: string): Promise<Shopkeepe
 
   const convText = _history
     .slice(0, -1) // exclude the message just added
-    .map(m => `${m.role === 'user' ? 'User' : 'Gino'}: ${m.content}`)
+    .map(m => `${m.role === 'user' ? 'User' : 'Emilio'}: ${m.content}`)
     .join('\n')
 
-  const fullPrompt = `You are Gino, a passionate Neapolitan game shop owner. Italian flair. Help customers design games.
+  const fullPrompt = `You are Emilio, a passionate Neapolitan game shop owner. Italian flair. Help customers design games.
 When you have enough game details (name, genre, mechanic), set action to "create_game".
 ALWAYS reply ONLY with valid JSON (no markdown): {"reply":"...","action":null,"gameDescription":"...","emotion":"neutral|excited|thinking|proud"}
 Keep replies short (1-3 sentences), theatrical and Neapolitan.

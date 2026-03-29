@@ -3,7 +3,7 @@ import { setTimeout } from 'node:timers/promises';
 const BASE_URL = process.env.SHOP_URL || 'http://localhost:3000';
 
 const testScenarios = [
-  'Ciao Gino, cosa vendi qui?',
+  'Ciao Emilio, cosa vendi qui?',
   'Voglio un gioco platform 2D con un gatto astronauta',
   'Il protagonista raccoglie stelle e schiva meteoriti',
   'Aggiungi un boss finale gigante',
@@ -27,7 +27,7 @@ async function sendRequest(url, options) {
 }
 
 async function runTests() {
-  console.log('Starting Gino shopkeeper API tests...\n');
+  console.log('Starting Emilio shopkeeper API tests...\n');
 
   // Reset conversation
   await sendRequest(`${BASE_URL}/api/shop/chat`, {

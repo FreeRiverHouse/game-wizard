@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 const BOT_SCRIPT = [
-  'Ciao Gino! Cosa vendi qui?',
+  'Ciao Emilio! Cosa vendi qui?',
   'Voglio creare un gioco platform 2D con un gatto astronauta',
   'Il protagonista si chiama Cosmo e raccoglie stelle nello spazio',
   'Aggiungi un boss finale gigante: un buco nero con faccia arrabbiata',
@@ -13,7 +13,7 @@ const BOT_SCRIPT = [
 
 export default function ShopPage() {
   const [messages, setMessages] = useState<Array<{ role: string; content: string; emotion?: string }>>([
-    { role: 'shopkeeper', content: "Benvenuto! I am Gino. Tell me — what kind of game lives in your imagination?", emotion: 'excited' }
+    { role: 'shopkeeper', content: "Benvenuto! I am Emilio. Tell me — what kind of game lives in your imagination?", emotion: 'excited' }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +24,7 @@ export default function ShopPage() {
   const [botStep, setBotStep] = useState(0);
   const botAbortRef = useRef<boolean>(false);
   const [pipeline, setPipeline] = useState<null | {
-    gino: string; planner: string; coder: string; vision: string; detail: string; loopState: string;
+    emilio: string; planner: string; coder: string; vision: string; detail: string; loopState: string;
   }>(null);
   const pipelineTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRef = useRef<any>(null);
@@ -116,7 +116,7 @@ export default function ShopPage() {
         const r = await fetch('/api/orchestrator/status');
         const d = await r.json();
         setPipeline({
-          gino:      'ready',
+          emilio:    'ready',
           planner:   d.pipeline?.planner?.status ?? d.orchestrator?.pipeline?.planner ?? 'idle',
           coder:     d.pipeline?.coder?.status   ?? d.orchestrator?.pipeline?.coder   ?? 'idle',
           vision:    d.pipeline?.vision?.status  ?? d.orchestrator?.pipeline?.vision  ?? 'idle',
@@ -135,7 +135,7 @@ export default function ShopPage() {
   };
 
   const triggerGameCreation = async (gameDescription: string) => {
-    setPipeline({ gino: 'ready', planner: 'idle', coder: 'idle', vision: 'idle', detail: 'Starting...', loopState: 'starting' });
+    setPipeline({ emilio: 'ready', planner: 'idle', coder: 'idle', vision: 'idle', detail: 'Starting...', loopState: 'starting' });
     startPipelinePolling();
     try {
       await fetch('/api/loop/start', {
@@ -158,7 +158,7 @@ export default function ShopPage() {
     setIsBotRunning(false);
     setBotStep(0);
     await fetch('/api/shop/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: '__reset__' }) });
-    setMessages([{ role: 'shopkeeper', content: "Benvenuto! I am Gino. Tell me — what kind of game lives in your imagination?", emotion: 'excited' }]);
+    setMessages([{ role: 'shopkeeper', content: "Benvenuto! I am Emilio. Tell me — what kind of game lives in your imagination?", emotion: 'excited' }]);
   };
 
   const runBotTest = async () => {
@@ -167,7 +167,7 @@ export default function ShopPage() {
     setIsBotRunning(true);
     setBotStep(0);
     await fetch('/api/shop/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: '__reset__' }) });
-    setMessages([{ role: 'shopkeeper', content: "Benvenuto! I am Gino. Tell me — what kind of game lives in your imagination?", emotion: 'excited' }]);
+    setMessages([{ role: 'shopkeeper', content: "Benvenuto! I am Emilio. Tell me — what kind of game lives in your imagination?", emotion: 'excited' }]);
     for (let i = 0; i < BOT_SCRIPT.length; i++) {
       if (botAbortRef.current) break;
       await new Promise(r => setTimeout(r, 1500));
@@ -207,7 +207,7 @@ export default function ShopPage() {
           textAlign: 'center', color: '#00eeff', fontWeight: 900, fontSize: 22, letterSpacing: 3,
           textShadow: '0 0 10px #00eeff, 0 0 30px #00eeff, 0 0 60px #00eeff',
           whiteSpace: 'nowrap' }}>
-          🎮 GINO&apos;S GAME SHOP 🎮
+          🎮 EMILIO&apos;S GAME SHOP 🎮
         </div>
 
         {/* Sunset sun */}
@@ -271,7 +271,7 @@ export default function ShopPage() {
             borderTop: '3px solid #C48A3A',
             boxShadow: 'inset 0 2px 6px rgba(255,200,100,0.15)' }} />
 
-          {/* ── GINO ── */}
+          {/* ── EMILIO ── */}
           <div style={{ position: 'absolute', bottom: 44, left: '50%', transform: 'translateX(-50%)' }}>
 
             {/* BODY (behind counter) */}
@@ -386,7 +386,7 @@ export default function ShopPage() {
         {pipeline && (() => {
           const s = (v: string) => v === 'running' ? '🟢' : v === 'loading' ? '🟡' : v === 'ready' ? '🟢' : '⚪';
           const stages = [
-            { key: 'gino',    label: 'Gino',    model: 'Sonnet',    val: pipeline.gino },
+            { key: 'emilio',  label: 'Emilio',  model: 'Sonnet',    val: pipeline.emilio },
             { key: 'planner', label: 'Planner', model: 'Qwen3.5',   val: pipeline.planner },
             { key: 'coder',   label: 'Coder',   model: 'Qwen-Code', val: pipeline.coder },
             { key: 'vision',  label: 'Vision',  model: 'VL-7B',     val: pipeline.vision },
@@ -420,7 +420,7 @@ export default function ShopPage() {
         <div style={{ padding: '12px 16px', borderBottom: '1px solid #3d1060',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ color: '#00eeff', fontWeight: 700, fontSize: 14, letterSpacing: 2 }}>
-            GINO&apos;S SHOP // CHAT
+            EMILIO&apos;S SHOP // CHAT
           </span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button onClick={() => setTtsEnabled(v => !v)}
