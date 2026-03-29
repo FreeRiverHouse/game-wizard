@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
 const BOT_SCRIPT = [
   'Ciao Gino! Cosa vendi qui?',
@@ -18,6 +19,7 @@ export default function ShopPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const router = useRouter();
   const [isBotRunning, setIsBotRunning] = useState(false);
   const [botStep, setBotStep] = useState(0);
   const botAbortRef = useRef<boolean>(false);
@@ -92,10 +94,34 @@ export default function ShopPage() {
       const reply = data.reply || data.response || 'Mamma mia…';
       setMessages(prev => [...prev, { role: 'shopkeeper', content: reply, emotion: data.emotion }]);
       if (ttsEnabled) playTTS(reply);
+      if (data.action === 'create_game' && data.gameDescription) {
+        setMessages(prev => [...prev, { role: 'system', content: '🎮 GIOCO CREATO: ' + data.gameDescription }]);
+        await triggerGameCreation(data.gameDescription);
+      }
     } catch {
       setMessages(prev => [...prev, { role: 'shopkeeper', content: 'Mamma mia, un momento...', emotion: 'thinking' }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const triggerGameCreation = async (gameDescription: string) => {
+    // Start the game wizard loop with the description as objective
+    try {
+      await fetch('/api/loop/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          objective: gameDescription,
+          maxIterations: 3,
+          continuous: false,
+          autoCommit: false,
+        })
+      });
+      // Short delay then redirect to loop page to watch it build
+      setTimeout(() => router.push('/loop'), 1500);
+    } catch (e) {
+      console.error('Failed to start loop:', e);
     }
   };
 
@@ -128,8 +154,9 @@ export default function ShopPage() {
         const reply = data.reply || 'Mamma mia...';
         setMessages(prev => [...prev, { role: 'shopkeeper', content: reply, emotion: data.emotion }]);
         if (ttsEnabled) playTTS(reply);
-        if (data.action === 'create_game') {
-          setMessages(prev => [...prev, { role: 'system', content: '🎮 GIOCO CREATO: ' + (data.gameDescription || '') }]);
+        if (data.action === 'create_game' && data.gameDescription) {
+          setMessages(prev => [...prev, { role: 'system', content: '🎮 GIOCO CREATO: ' + data.gameDescription }]);
+          await triggerGameCreation(data.gameDescription);
         }
       } catch { setMessages(prev => [...prev, { role: 'shopkeeper', content: 'Mamma mia!', emotion: 'thinking' }]); }
       finally { setIsLoading(false); }
