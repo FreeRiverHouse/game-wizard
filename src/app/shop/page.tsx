@@ -2,14 +2,25 @@
 
 import { useState, useEffect, useRef } from 'react';
 
+const BOT_SCRIPT = [
+  'Ciao Gino! Cosa vendi qui?',
+  'Voglio creare un gioco platform 2D con un gatto astronauta',
+  'Il protagonista si chiama Cosmo e raccoglie stelle nello spazio',
+  'Aggiungi un boss finale gigante: un buco nero con faccia arrabbiata',
+  'Perfetto! Crea questo gioco adesso!',
+];
+
 export default function ShopPage() {
   const [messages, setMessages] = useState<Array<{ role: string; content: string; emotion?: string }>>([
     { role: 'shopkeeper', content: "Benvenuto! I am Gino. Tell me — what kind of game lives in your imagination?", emotion: 'excited' }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [ttsEnabled, setTtsEnabled] = useState(false); // off by default until VibeVoice server is up
+  const [ttsEnabled, setTtsEnabled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isBotRunning, setIsBotRunning] = useState(false);
+  const [botStep, setBotStep] = useState(0);
+  const botAbortRef = useRef<boolean>(false);
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -89,8 +100,42 @@ export default function ShopPage() {
   };
 
   const resetChat = async () => {
+    botAbortRef.current = true;
+    setIsBotRunning(false);
+    setBotStep(0);
     await fetch('/api/shop/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: '__reset__' }) });
     setMessages([{ role: 'shopkeeper', content: "Benvenuto! I am Gino. Tell me — what kind of game lives in your imagination?", emotion: 'excited' }]);
+  };
+
+  const runBotTest = async () => {
+    if (isBotRunning) { botAbortRef.current = true; setIsBotRunning(false); return; }
+    botAbortRef.current = false;
+    setIsBotRunning(true);
+    setBotStep(0);
+    await fetch('/api/shop/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: '__reset__' }) });
+    setMessages([{ role: 'shopkeeper', content: "Benvenuto! I am Gino. Tell me — what kind of game lives in your imagination?", emotion: 'excited' }]);
+    for (let i = 0; i < BOT_SCRIPT.length; i++) {
+      if (botAbortRef.current) break;
+      await new Promise(r => setTimeout(r, 1500));
+      if (botAbortRef.current) break;
+      const msg = BOT_SCRIPT[i];
+      setBotStep(i + 1);
+      setMessages(prev => [...prev, { role: 'bot', content: msg }]);
+      setIsLoading(true);
+      try {
+        const resp = await fetch('/api/shop/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) });
+        const data = await resp.json();
+        const reply = data.reply || 'Mamma mia...';
+        setMessages(prev => [...prev, { role: 'shopkeeper', content: reply, emotion: data.emotion }]);
+        if (ttsEnabled) playTTS(reply);
+        if (data.action === 'create_game') {
+          setMessages(prev => [...prev, { role: 'system', content: '🎮 GIOCO CREATO: ' + (data.gameDescription || '') }]);
+        }
+      } catch { setMessages(prev => [...prev, { role: 'shopkeeper', content: 'Mamma mia!', emotion: 'thinking' }]); }
+      finally { setIsLoading(false); }
+      await new Promise(r => setTimeout(r, 600));
+    }
+    setIsBotRunning(false); setBotStep(0);
   };
 
   const lastMsg = messages[messages.length - 1];
@@ -294,6 +339,12 @@ export default function ShopPage() {
               title={ttsEnabled ? 'Voice ON (click to mute)' : 'Voice OFF (VibeVoice server needed)'}>
               {ttsEnabled ? '🔊' : '🔇'}
             </button>
+            <button onClick={runBotTest}
+              style={{ background: isBotRunning ? '#dc2626' : '#7c3aed', border: 'none',
+                color: '#fff', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontSize: 11,
+                animation: isBotRunning ? 'pulse 1s infinite' : 'none' }}>
+              {isBotRunning ? `⏹ STOP (${botStep}/${BOT_SCRIPT.length})` : '🤖 BOT TEST'}
+            </button>
             <button onClick={resetChat}
               style={{ background: '#3d1060', border: '1px solid #7c3aed', color: '#c084fc',
                 borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontSize: 11 }}>
@@ -305,16 +356,24 @@ export default function ShopPage() {
         {/* Messages */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.map((msg, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-              <div style={{
-                maxWidth: '80%', padding: '8px 12px', borderRadius: 10, fontSize: 13, lineHeight: 1.5,
-                background: msg.role === 'user' ? 'rgba(0,238,255,0.12)' : 'rgba(124,58,237,0.15)',
-                border: `1px solid ${msg.role === 'user' ? '#00eeff55' : '#7c3aed88'}`,
-                color: msg.role === 'user' ? '#a5f3fc' : '#ddd6fe'
-              }}>
+            msg.role === 'system' ? (
+              <div key={i} style={{ textAlign: 'center', color: '#4ade80', fontSize: 12,
+                padding: '6px 10px', border: '1px solid #4ade80', borderRadius: 8,
+                background: 'rgba(74,222,128,0.08)', animation: 'pulse 2s infinite' }}>
                 {msg.content}
               </div>
+            ) : (
+            <div key={i} style={{ display: 'flex', justifyContent: (msg.role === 'user' || msg.role === 'bot') ? 'flex-end' : 'flex-start' }}>
+              <div style={{
+                maxWidth: '80%', padding: '8px 12px', borderRadius: 10, fontSize: 13, lineHeight: 1.5,
+                background: msg.role === 'user' ? 'rgba(0,238,255,0.12)' : msg.role === 'bot' ? 'rgba(168,85,247,0.15)' : 'rgba(124,58,237,0.15)',
+                border: `1px solid ${msg.role === 'user' ? '#00eeff55' : msg.role === 'bot' ? '#a855f788' : '#7c3aed88'}`,
+                color: msg.role === 'user' ? '#a5f3fc' : msg.role === 'bot' ? '#e9d5ff' : '#ddd6fe'
+              }}>
+                {msg.role === 'bot' ? '🤖 ' + msg.content : msg.content}
+              </div>
             </div>
+            )
           ))}
           {isLoading && (
             <div style={{ display: 'flex', gap: 4, paddingLeft: 8 }}>
