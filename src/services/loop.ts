@@ -1,12 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { runBuild, runScreenshot, runGitCommit, runGitDiff } from './shell'
+import { runBuild, runGitCommit, runGitDiff } from './shell'
 import { analyzeScreenshotLocal, generateCodeChangesLocal, generatePMSummary } from './ai'
 import { ensureModel, releaseModel, setOrchestratorLogger } from './model-orchestrator'
 import { getDb } from './db'
 import { getActiveGameId, getGamePaths } from './game-context'
 import type { LoopState, LoopOptions, AnalysisResult, CodeChange } from '@/lib/types'
 import { generateNextObjective } from './planner'
+import { runGameTest } from './game-tester'
+import { PGR_GAMEPLAY_SCENARIO } from './test-scenarios'
 
 // ── Singleton state (vive nel processo Next.js) ──
 
@@ -96,6 +98,7 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
   // ── Paths dinamici dal gioco attivo ──
   const gameId = getActiveGameId()
   const { gamePath, referenceImage, buildersDir, coreDir } = getGamePaths()
+  const screenshotsDir = path.join(gamePath, 'screenshots')
 
   emit('log', `=== ITERATION ${iterNum} [${gameId}] ===`)
   emit('log', `Objective: ${options.objective}`)
@@ -127,18 +130,26 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
   if (!buildResult.success) throw new Error(`Build failed (exit ${buildResult.exitCode})`)
   emit('log', `Build OK in ${buildResult.durationMs}ms`)
 
-  // ── STEP 2: SCREENSHOT ────────────────────────────────────────────────────
+  // ── STEP 2: GAME TEST ────────────────────────────────────────────────────
   setState('screenshotting')
-  emit('log', '[2/5] Taking screenshot...')
+  emit('log', '[2/5] Running game test...')
 
-  const ssResult = await runScreenshot(gamePath, signal)
+  const testResult = await runGameTest(
+    path.join(gamePath, 'Builds', 'PizzaGelatoRush.app'),
+    PGR_GAMEPLAY_SCENARIO,
+    screenshotsDir,
+    (msg) => emit('log', msg)
+  )
   if (signal.aborted) return false
-  if (!ssResult.success) throw new Error(`Screenshot failed (exit ${ssResult.exitCode})`)
-  emit('log', `Screenshot → ${ssResult.screenshotPath}`)
-  emit('screenshot', ssResult.screenshotPath || '')
+  if (!testResult.success || testResult.screenshotPaths.length === 0) {
+    throw new Error(`Game test failed: ${testResult.error || 'no screenshots'}`)
+  }
+  const screenshotPath = testResult.screenshotPaths[testResult.screenshotPaths.length - 1]
+  emit('log', `Game test OK — ${testResult.screenshotPaths.length} screenshots`)
+  emit('screenshot', screenshotPath)
 
   db.prepare('UPDATE iterations SET screenshot_path = ?, status = ? WHERE game_id = ? AND number = ?')
-    .run(ssResult.archivePath || ssResult.screenshotPath, 'analyzing', gameId, iterNum)
+    .run(screenshotPath, 'analyzing', gameId, iterNum)
 
   // ── STEP 3: ANALYZE (Vision) ──────────────────────────────────────────────
   const context = [
@@ -152,7 +163,7 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
   const { url: visionUrl, model: visionModel } = await ensureModel('vision')
   setState('analyzing')
   emit('log', '[3/5] Analisi screenshot con vision locale...')
-  _lastAnalysis = await analyzeScreenshotLocal(ssResult.screenshotPath!, referenceImage, context, visionUrl, visionModel)
+  _lastAnalysis = await analyzeScreenshotLocal(screenshotPath, referenceImage, context, visionUrl, visionModel)
   if (signal.aborted) { await releaseModel(); return false }
   emit('log', '[3/5] Vision done. RAM liberata al prossimo swap.')
 
