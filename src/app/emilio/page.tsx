@@ -43,6 +43,22 @@ export default function EmilioPage() {
 
   const { enabled, toggle: toggleAudio } = useOceanAudio();
 
+  const playTTS = async (text: string) => {
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.onended = () => URL.revokeObjectURL(url)
+      await audio.play()
+    } catch { /* non-fatal */ }
+  }
+
   useEffect(() => {
     const fetchState = async () => {
       try {
@@ -83,6 +99,7 @@ export default function EmilioPage() {
       setGPStep(i + 1);
       const botMsg = GP_SCRIPT[i];
       setMessages(prev => [...prev, { role: 'bot', content: '🐹 ' + botMsg }]);
+      void playTTS(botMsg);
       setIsLoading(true);
       try {
         const res = await fetch('/api/shop/chat', {
@@ -90,8 +107,10 @@ export default function EmilioPage() {
           body: JSON.stringify({ message: botMsg })
         });
         const data = await res.json();
-        setMessages(prev => [...prev, { role: 'shopkeeper', content: data.reply || '...', emotion: data.emotion }]);
+        const emilioReply: string = data.reply || '...';
+        setMessages(prev => [...prev, { role: 'shopkeeper', content: emilioReply, emotion: data.emotion }]);
         setLastEmotion(data.emotion || 'neutral');
+        void playTTS(emilioReply);
         if (data.action === 'start_coder' && data.coderPayload) {
           await fetch('/api/onde-flow/state', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -137,8 +156,10 @@ export default function EmilioPage() {
       });
       const data = await res.json();
 
-      setMessages(prev => [...prev, { role:'shopkeeper', content:data.reply || '...', emotion:data.emotion }]);
+      const emilioReply: string = data.reply || '...';
+      setMessages(prev => [...prev, { role:'shopkeeper', content:emilioReply, emotion:data.emotion }]);
       setLastEmotion(data.emotion || 'neutral');
+      void playTTS(emilioReply);
 
       if (data.action === 'start_coder' && data.coderPayload) {
         await fetch('/api/onde-flow/state', {

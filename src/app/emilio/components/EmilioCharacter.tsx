@@ -1,115 +1,234 @@
-'use client';
+'use client'
 
-import { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import { useRef, useEffect } from 'react'
+import { useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
 
 interface EmilioCharacterProps {
-  emotion: 'neutral' | 'excited' | 'thinking' | 'proud' | 'focused' | 'relaxed';
+  emotion: 'neutral' | 'excited' | 'thinking' | 'proud' | 'focused' | 'relaxed' | 'happy'
 }
 
-export default function EmilioCharacter({ emotion }: EmilioCharacterProps){
-  const groupRef = useRef<THREE.Group>(null);
-  const headRef = useRef<THREE.Mesh>(null);
+export default function EmilioCharacter({ emotion }: EmilioCharacterProps) {
+  const groupRef = useRef<THREE.Group>(null)
+  const headRef = useRef<THREE.Mesh>(null)
+  const leftArmRef = useRef<THREE.Mesh>(null)
+  const rightArmRef = useRef<THREE.Mesh>(null)
+  const chestRef = useRef<THREE.Mesh>(null)
+  const mustacheLRef = useRef<THREE.Mesh>(null)
+  const mustacheRRef = useRef<THREE.Mesh>(null)
+
+  // Cleanup materials
+  useEffect(() => {
+    return () => {
+      // Materials will be garbage collected with meshes
+    }
+  }, [])
 
   useFrame((state) => {
-    const t = state.clock.elapsedTime;
+    const t = state.clock.elapsedTime
 
-    if (!groupRef.current) return;
+    if (!groupRef.current) return
+
+    // Reset transforms
+    groupRef.current.position.y = -0.1
+    groupRef.current.rotation.set(0, 0, 0)
+
+    if (chestRef.current) {
+      chestRef.current.scale.set(1, 1, 1)
+    }
+    if (headRef.current) {
+      headRef.current.rotation.set(0, 0, 0)
+    }
+    if (leftArmRef.current) {
+      leftArmRef.current.rotation.set(0, 0, 0)
+    }
+    if (rightArmRef.current) {
+      rightArmRef.current.rotation.set(0, 0, 0)
+    }
+    if (mustacheLRef.current && mustacheRRef.current) {
+      mustacheLRef.current.scale.set(1, 1, 1)
+      mustacheRRef.current.scale.set(1, 1, 1)
+    }
 
     switch (emotion) {
       case 'neutral':
-        groupRef.current.position.y = -0.1 + Math.sin(t * 1.2) * 0.015;
-        break;
-      case 'excited':
-        groupRef.current.position.y = -0.1 + Math.abs(Math.sin(t * 3)) * 0.06;
-        break;
-      case 'thinking':
-        if (headRef.current) {
-          headRef.current.rotation.z = Math.sin(t * 0.8) * 0.18;
+        // Idle breathing
+        groupRef.current.position.y = -0.1 + Math.sin(t * 1.5) * 0.015
+        if (chestRef.current) {
+          chestRef.current.scale.y = 0.98 + Math.sin(t * 2) * 0.02
         }
-        break;
+        break
+
+      case 'excited':
+        // Fast bob + arms raised
+        groupRef.current.position.y = -0.15 + Math.abs(Math.sin(t * 4)) * 0.12
+        if (leftArmRef.current) {
+          leftArmRef.current.rotation.z = 0.8 + Math.sin(t * 6) * 0.2
+        }
+        if (rightArmRef.current) {
+          rightArmRef.current.rotation.z = -0.8 - Math.sin(t * 6) * 0.2
+        }
+        break
+
+      case 'happy':
+        // Lean forward + mustache scale up
+        groupRef.current.rotation.x = 0.15
+        groupRef.current.position.y = -0.1 + Math.sin(t * 2) * 0.03
+        if (mustacheLRef.current && mustacheRRef.current) {
+          const mustacheScale = 1 + Math.sin(t * 1.5) * 0.1
+          mustacheLRef.current.scale.y = mustacheScale
+          mustacheRRef.current.scale.y = mustacheScale
+        }
+        break
+
+      case 'thinking':
+        // Head tilt + right arm to face
+        groupRef.current.position.y = -0.1 + Math.sin(t * 0.8) * 0.01
+        if (headRef.current) {
+          headRef.current.rotation.z = Math.sin(t * 0.5) * 0.15
+          headRef.current.rotation.y = Math.sin(t * 0.3) * 0.1
+        }
+        if (rightArmRef.current) {
+          rightArmRef.current.rotation.z = -1.2 + Math.sin(t) * 0.1
+          rightArmRef.current.position.y = 0.4
+        }
+        break
+
       case 'proud':
-        groupRef.current.rotation.y = Math.sin(t * 0.5) * 0.25;
-        break;
+        // Slow rotation sway
+        groupRef.current.position.y = -0.08 + Math.sin(t * 0.6) * 0.02
+        groupRef.current.rotation.y = Math.sin(t * 0.4) * 0.2
+        break
+
       case 'focused':
-        groupRef.current.position.y = -0.1 + Math.sin(t * 0.7) * 0.008;
-        break;
+        // Minimal movement
+        groupRef.current.position.y = -0.1 + Math.sin(t * 0.3) * 0.005
+        break
+
       case 'relaxed':
-        groupRef.current.rotation.z = Math.sin(t * 0.4) * 0.05;
-        break;
+        // Gentle sway
+        groupRef.current.position.y = -0.12 + Math.sin(t * 0.8) * 0.02
+        groupRef.current.rotation.z = Math.sin(t * 0.4) * 0.04
+        break
+
       default:
-        break;
+        break
     }
-  });
+  })
 
   return (
     <group ref={groupRef} position={[0.4, -0.1, 0.9]}>
-      {/* Testa */}
+      {/* Head */}
       <mesh ref={headRef} position={[0, 0.55, 0]}>
         <sphereGeometry args={[0.2, 32, 32]} />
-        <meshStandardMaterial color="#C8956C" />
+        <meshToonMaterial color="#c68642" />
       </mesh>
 
-      {/* Occhi */}
+      {/* Eyes - black */}
       <mesh position={[-0.07, 0.6, 0.18]}>
         <sphereGeometry args={[0.025, 16, 16]} />
-        <meshStandardMaterial color="#1a0a00" />
+        <meshBasicMaterial color="#1a0a00" />
       </mesh>
       <mesh position={[0.07, 0.6, 0.18]}>
         <sphereGeometry args={[0.025, 16, 16]} />
-        <meshStandardMaterial color="#1a0a00" />
+        <meshBasicMaterial color="#1a0a00" />
       </mesh>
 
-      {/* Naso */}
+      {/* Eye highlights */}
+      <mesh position={[-0.06, 0.61, 0.2]}>
+        <sphereGeometry args={[0.008, 8, 8]} />
+        <meshBasicMaterial color="#ffffff" />
+      </mesh>
+      <mesh position={[0.08, 0.61, 0.2]}>
+        <sphereGeometry args={[0.008, 8, 8]} />
+        <meshBasicMaterial color="#ffffff" />
+      </mesh>
+
+      {/* Nose */}
       <mesh position={[0, 0.53, 0.2]}>
         <sphereGeometry args={[0.03, 16, 16]} />
-        <meshStandardMaterial color="#b07355" />
+        <meshToonMaterial color="#b07355" />
       </mesh>
 
-      {/* Baffi */}
-      <mesh position={[-0.045, 0.49, 0.19]} rotation={[0, 0, -0.3]}>
+      {/* Mustache left */}
+      <mesh ref={mustacheLRef} position={[-0.055, 0.49, 0.19]} rotation={[0, 0, -0.3]}>
         <boxGeometry args={[0.1, 0.018, 0.02]} />
-        <meshStandardMaterial color="#1a0800" />
-      </mesh>
-      <mesh position={[0.045, 0.49, 0.19]} rotation={[0, 0, 0.3]}>
-        <boxGeometry args={[0.1, 0.018, 0.02]} />
-        <meshStandardMaterial color="#1a0800" />
+        <meshToonMaterial color="#3d1f00" />
       </mesh>
 
-      {/* Corpo */}
-      <mesh position={[0, 0.22, 0]}>
+      {/* Mustache right */}
+      <mesh ref={mustacheRRef} position={[0.055, 0.49, 0.19]} rotation={[0, 0, 0.3]}>
+        <boxGeometry args={[0.1, 0.018, 0.02]} />
+        <meshToonMaterial color="#3d1f00" />
+      </mesh>
+
+      {/* Body/chest */}
+      <mesh ref={chestRef} position={[0, 0.22, 0]}>
         <boxGeometry args={[0.36, 0.44, 0.22]} />
-        <meshStandardMaterial color="#CC2200" />
+        <meshToonMaterial color="#cc2200" />
       </mesh>
 
-      {/* Grembiule */}
+      {/* Apron */}
       <mesh position={[0, 0.22, 0.12]}>
         <boxGeometry args={[0.28, 0.38, 0.04]} />
-        <meshStandardMaterial color="#e8e0d0" />
+        <meshToonMaterial color="#e8e0d0" />
       </mesh>
 
-      {/* Cappello base */}
+      {/* Apron buttons */}
+      <mesh position={[-0.05, 0.35, 0.141]}>
+        <sphereGeometry args={[0.012, 8, 8]} />
+        <meshBasicMaterial color="#ffffff" />
+      </mesh>
+      <mesh position={[0.05, 0.25, 0.141]}>
+        <sphereGeometry args={[0.012, 8, 8]} />
+        <meshBasicMaterial color="#ffffff" />
+      </mesh>
+
+      {/* Chef hat - base */}
       <mesh position={[0, 0.77, 0]}>
-        <cylinderGeometry args={[0.18, 0.2, 0.06, 32]} />
-        <meshStandardMaterial color="#f5f5f5" />
+        <cylinderGeometry args={[0.2, 0.22, 0.06, 32]} />
+        <meshToonMaterial color="#f5f5f5" />
       </mesh>
 
-      {/* Cappello top */}
+      {/* Chef hat - band black */}
+      <mesh position={[0, 0.74, 0]}>
+        <cylinderGeometry args={[0.21, 0.21, 0.04, 32]} />
+        <meshToonMaterial color="#1a1a1a" />
+      </mesh>
+
+      {/* Chef hat - top */}
       <mesh position={[0, 0.91, 0]}>
         <cylinderGeometry args={[0.14, 0.18, 0.25, 32]} />
-        <meshStandardMaterial color="#ffffff" />
+        <meshToonMaterial color="#ffffff" />
       </mesh>
 
-      {/* Braccia */}
-      <mesh position={[-0.23, 0.22, 0]}>
-        <boxGeometry args={[0.1, 0.32, 0.1]} />
-        <meshStandardMaterial color="#CC2200" />
+      {/* Left arm */}
+      <mesh ref={leftArmRef} position={[-0.23, 0.22, 0]} rotation={[0, 0, 0.3]}>
+        <cylinderGeometry args={[0.04, 0.04, 0.3, 16]} />
+        <meshToonMaterial color="#cc2200" />
       </mesh>
-      <mesh position={[0.23, 0.22, 0]}>
-        <boxGeometry args={[0.1, 0.32, 0.1]} />
-        <meshStandardMaterial color="#CC2200" />
+
+      {/* Right arm */}
+      <mesh ref={rightArmRef} position={[0.23, 0.22, 0]} rotation={[0, 0, -0.3]}>
+        <cylinderGeometry args={[0.04, 0.04, 0.3, 16]} />
+        <meshToonMaterial color="#cc2200" />
+      </mesh>
+
+      {/* Hands */}
+      <mesh position={[-0.28, 0.05, 0]}>
+        <sphereGeometry args={[0.045, 16, 16]} />
+        <meshToonMaterial color="#c68642" />
+      </mesh>
+      <mesh position={[0.28, 0.05, 0]}>
+        <sphereGeometry args={[0.045, 16, 16]} />
+        <meshToonMaterial color="#c68642" />
+      </mesh>
+
+      {/* Shadow */}
+      <mesh position={[0, -0.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.5, 0.3]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.3} />
       </mesh>
     </group>
-  );
+  )
 }
