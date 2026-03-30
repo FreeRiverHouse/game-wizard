@@ -1,5 +1,8 @@
 import { execFileSync } from 'child_process'
 
+// Define EmilioBackend type with support for different model backends
+export type EmilioBackend = 'opus-distill' | 'sonnet' | 'coder'
+
 export interface ShopkeeperMessage {
   role: 'user' | 'shopkeeper'
   content: string
@@ -16,24 +19,84 @@ export interface ShopkeeperResponse {
 }
 
 let _history: ShopkeeperMessage[] = []
+let _currentBackend: EmilioBackend = 'opus-distill'
+
+export function getCurrentBackend(): EmilioBackend {
+  return _currentBackend
+}
+
+export function setCurrentBackend(b: EmilioBackend): void {
+  _currentBackend = b
+}
 
 export function buildSystemPrompt(appContext?: string): string {
-  const base = `Sei Emilio, il concierge di Onde-Flow — un creative OS che gestisce repo e progetti creativi. Hai un carattere napoletano appassionato. Aiuti l'utente a pianificare il lavoro e delegare al Coder.
-Azioni che puoi impostare:
+  const base = `Sei Emilio, il concierge di Onde-Flow — un creative OS che gestisce repo e progetti creativi. Hai un carattere napoletano appassionato. Aiuti l'utente a pianificare il lavoro e delegare al Coder. Azioni che puoi impostare:
 - create_game: quando l'utente vuole progettare un nuovo gioco
 - start_coder: quando l'utente vuole iniziare a programmare un piano. Imposta coderPayload con {app, tasks:string[], plan:string}
 - switch_app: quando l'utente menziona di voler passare a un altro progetto. Imposta switchApp=nomeApp
+
 Quando usi start_coder, tasks deve essere un array di task concreti.
-RISPONDI SEMPRE SOLO con JSON valido (no markdown): {"reply":"...","action":null,"emotion":"neutral","coderPayload":null,"switchApp":null,"gameDescription":null}
+
+RISPONDI SEMPRE SOLO con JSON valido (no markdown):
+{"reply":"...","action":null,"emotion":"neutral","coderPayload":null,"switchApp":null,"gameDescription":null}
+
 Risposte brevi (1-3 frasi), calorose e con tocco napoletano. Rispondi in italiano.`
 
   if (appContext) {
-    return `=== CONTESTO PROGETTI ===\n${appContext}\n=== FINE CONTESTO ===\n\n${base}`
+    return `=== CONTESTO PROGETTI ===
+${appContext}
+=== FINE CONTESTO ===
+
+${base}`
   }
   return base
 }
 
-export async function chatWithShopkeeper(userMessage: string, appContext?: string): Promise<ShopkeeperResponse> {
+// Private function to call LM Studio API
+async function callLMStudio(
+  messages: Array<{ role: string; content: string }>,
+  modelKey: string
+): Promise<string> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+  try {
+    const response = await fetch('http://localhost:1234/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelKey,
+        messages,
+        temperature: 0.7,
+        max_tokens: 512
+      }),
+      signal: controller.signal
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      throw new Error(`LM Studio error: ${response.status}`)
+    }
+
+    const data = await response.json() as {
+      choices: Array<{ message: { content: string } }>
+    }
+
+    return data.choices[0]?.message?.content ?? ''
+  } catch (error) {
+    clearTimeout(timeoutId)
+    throw error
+  }
+}
+
+export async function chatWithShopkeeper(
+  userMessage: string,
+  appContext?: string,
+  backend?: EmilioBackend
+): Promise<ShopkeeperResponse> {
+  const selectedBackend = backend ?? _currentBackend
+
   _history.push({ role: 'user', content: userMessage, timestamp: Date.now() })
 
   const convText = _history
@@ -42,28 +105,87 @@ export async function chatWithShopkeeper(userMessage: string, appContext?: strin
     .join('\n')
 
   const systemPrompt = buildSystemPrompt(appContext)
-  const fullPrompt = `${systemPrompt}
-
-${convText ? convText + '\n' : ''}User: ${userMessage}
-Rispondi con JSON:`
+  const fullPrompt = `${systemPrompt}\n${convText ? convText + '\n' : ''}User: ${userMessage}\nRispondi con JSON:`
 
   try {
-    const raw = execFileSync('claude', ['-p', fullPrompt], {
-      encoding: 'utf8',
-      timeout: 30000,
-      env: { ...process.env }
-    })
+    let raw: string
+
+    if (selectedBackend === 'sonnet') {
+      raw = execFileSync('claude', ['-p', fullPrompt], {
+        encoding: 'utf8',
+        timeout: 30000,
+        env: { ...process.env }
+      })
+    } else if (selectedBackend === 'opus-distill') {
+      const historyAsOpenAI = _history.slice(0, -1).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }))
+
+      const lmMessages = [
+        { role: 'system', content: systemPrompt },
+        ...historyAsOpenAI,
+        { role: 'user', content: userMessage }
+      ]
+
+      raw = await callLMStudio(
+        lmMessages,
+        'vmlx-qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2'
+      )
+    } else if (selectedBackend === 'coder') {
+      const historyAsOpenAI = _history.slice(0, -1).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }))
+
+      const lmMessages = [
+        { role: 'system', content: systemPrompt },
+        ...historyAsOpenAI,
+        { role: 'user', content: userMessage }
+      ]
+
+      raw = await callLMStudio(lmMessages, 'qwen3-coder-30b-a3b-instruct-mlx')
+    } else {
+      // Fallback to sonnet
+      raw = execFileSync('claude', ['-p', fullPrompt], {
+        encoding: 'utf8',
+        timeout: 30000,
+        env: { ...process.env }
+      })
+    }
+
     const match = raw.match(/\{[\s\S]*\}/)
     const parsed: ShopkeeperResponse = JSON.parse(match ? match[0] : raw.trim())
-    _history.push({ role: 'shopkeeper', content: parsed.reply, timestamp: Date.now() })
+
+    _history.push({
+      role: 'shopkeeper',
+      content: parsed.reply,
+      timestamp: Date.now()
+    })
+
     return parsed
   } catch (error) {
     console.error('[shopkeeper] error:', error)
-    const fallback: ShopkeeperResponse = { reply: 'Mamma mia, un momento...', emotion: 'thinking' }
-    _history.push({ role: 'shopkeeper', content: fallback.reply, timestamp: Date.now() })
+
+    const fallback: ShopkeeperResponse = {
+      reply: "Mamma mia, ho avuto un problema... ma non ti preoccupare, riprovo subito!",
+      emotion: 'thinking'
+    }
+
+    _history.push({
+      role: 'shopkeeper',
+      content: fallback.reply,
+      timestamp: Date.now()
+    })
+
     return fallback
   }
 }
 
-export function getConversationHistory(): ShopkeeperMessage[] { return _history }
-export function resetConversation(): void { _history = [] }
+export function getConversationHistory(): ShopkeeperMessage[] {
+  return _history
+}
+
+export function resetConversation(): void {
+  _history = []
+}

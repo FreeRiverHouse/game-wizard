@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import ChatPanel from './components/ChatPanel';
 import SpeechBubble from './components/SpeechBubble';
@@ -9,11 +9,21 @@ import { useOceanAudio } from './hooks/useOceanAudio';
 const OceanCanvas = dynamic(() => import('./OceanCanvas'), { ssr: false });
 
 type Message = {
-  role: 'user' | 'shopkeeper' | 'system';
+  role: 'user' | 'shopkeeper' | 'system' | 'bot';
   content: string;
   emotion?: string
 };
 type OndeFlowMode = 'EMILIO_ACTIVE' | 'CODER_ACTIVE' | 'IDLE';
+type EmilioBackend = 'opus-distill' | 'sonnet' | 'coder';
+
+const GP_SCRIPT = [
+  'Ciao Emilio! Quali progetti abbiamo in corso?',
+  'Dimmi lo stato di game-studio, come siamo messi?',
+  'Voglio aggiungere un sistema di achievements al gioco',
+  'E il book-wizard? A che punto è la pipeline EPUB?',
+  'Ok, concentriamoci su game-studio per ora',
+  'Perfetto Emilio, manda il Coder su game-studio con i task che hai in mente'
+];
 
 export default function EmilioPage() {
   const [messages, setMessages] = useState<Message[]>([
@@ -24,6 +34,12 @@ export default function EmilioPage() {
   const [activeApp, setActiveApp] = useState<string | null>(null);
   const [ondeFlowMode, setOndeFlowMode] = useState<OndeFlowMode>('IDLE');
   const [lastEmotion, setLastEmotion] = useState('excited');
+
+  const [currentBackend, setCurrentBackend] = useState<EmilioBackend>('opus-distill');
+  const [isSwitchingBackend, setIsSwitchingBackend] = useState(false);
+  const [isGPRunning, setIsGPRunning] = useState(false);
+  const [gpStep, setGPStep] = useState(0);
+  const gpAbortRef = useRef(false);
 
   const { enabled, toggle: toggleAudio } = useOceanAudio();
 
@@ -40,6 +56,61 @@ export default function EmilioPage() {
     };
     fetchState();
   }, []);
+
+  async function handleSwitchBackend(b: EmilioBackend) {
+    setIsSwitchingBackend(true);
+    try {
+      await fetch('/api/emilio/switch-backend', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backend: b })
+      });
+      setCurrentBackend(b);
+    } catch { /* ignora */ }
+    setIsSwitchingBackend(false);
+  }
+
+  async function runGPTest() {
+    gpAbortRef.current = false;
+    setIsGPRunning(true);
+    setGPStep(0);
+    await fetch('/api/shop/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '__reset__' })
+    });
+    setMessages([{ role: 'system', content: '🐹 Guinea Pig avviato — ' + GP_SCRIPT.length + ' messaggi in coda' }]);
+    for (let i = 0; i < GP_SCRIPT.length; i++) {
+      if (gpAbortRef.current) break;
+      setGPStep(i + 1);
+      const botMsg = GP_SCRIPT[i];
+      setMessages(prev => [...prev, { role: 'bot', content: '🐹 ' + botMsg }]);
+      setIsLoading(true);
+      try {
+        const res = await fetch('/api/shop/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: botMsg })
+        });
+        const data = await res.json();
+        setMessages(prev => [...prev, { role: 'shopkeeper', content: data.reply || '...', emotion: data.emotion }]);
+        setLastEmotion(data.emotion || 'neutral');
+        if (data.action === 'start_coder' && data.coderPayload) {
+          await fetch('/api/onde-flow/state', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ startCoder: data.coderPayload })
+          });
+          setOndeFlowMode('CODER_ACTIVE');
+          setMessages(prev => [...prev, { role: 'system', content: '⚡ Coder avviato dal GP test' }]);
+        }
+      } catch {
+        setMessages(prev => [...prev, { role: 'system', content: 'Errore step ' + (i + 1) }]);
+      }
+      setIsLoading(false);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    setIsGPRunning(false);
+    setMessages(prev => [...prev, { role: 'system', content: '🐹 GP Test completato!' }]);
+  }
+
+  function stopGPTest() { gpAbortRef.current = true; }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +208,14 @@ export default function EmilioPage() {
         onReset={handleReset}
         activeApp={activeApp}
         ondeFlowMode={ondeFlowMode}
+        currentBackend={currentBackend}
+        onSwitchBackend={handleSwitchBackend}
+        isSwitchingBackend={isSwitchingBackend}
+        isGPRunning={isGPRunning}
+        gpStep={gpStep}
+        gpTotal={GP_SCRIPT.length}
+        onRunGP={runGPTest}
+        onStopGP={stopGPTest}
       />
     </main>
   );
