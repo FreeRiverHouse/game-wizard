@@ -87,10 +87,24 @@ export default function SceneEnvironment() {
     ];
   }, []);
 
-  const createCloudGeometry = (scale: number) => {
-    const shape = new THREE.Shape();
-    shape.absarc(0, 0, 0.4 * scale, 0, Math.PI * 2);
-    return new THREE.ShapeGeometry(shape);
+  const Cloud = ({ x, y, z }: { x: number; y: number; z: number }) => {
+    const spheres = useMemo(() => [
+      { px: 0,     py: 0,    r: 0.12 },
+      { px: -0.14, py: -0.02, r: 0.09 },
+      { px:  0.15, py: -0.01, r: 0.10 },
+      { px: -0.07, py:  0.07, r: 0.08 },
+      { px:  0.08, py:  0.08, r: 0.07 },
+    ], []);
+    return (
+      <group position={[x, y, z]}>
+        {spheres.map((s, i) => (
+          <mesh key={i} position={[s.px, s.py, 0]}>
+            <sphereGeometry args={[s.r, 8, 6]} />
+            <meshToonMaterial color="#ffffff" transparent opacity={0.75} />
+          </mesh>
+        ))}
+      </group>
+    );
   };
 
   // Dock geometries
@@ -243,16 +257,17 @@ export default function SceneEnvironment() {
         })}
       </group>
 
+      {/* Sun */}
+      <mesh position={[-2.5, 1.8, -7]}>
+        <sphereGeometry args={[0.35, 16, 16]} />
+        <meshBasicMaterial color="#FFD166" />
+      </mesh>
+      <pointLight position={[-2.5, 1.8, -5]} color="#FF9944" intensity={1.5} />
+
       {/* Clouds layer */}
       <group ref={cloudsGroupRef}>
         {cloudShapes.map((cloud, i) => (
-          <mesh
-            key={i}
-            position={[cloud.x, cloud.y, cloud.z]}
-          >
-            <primitive object={createCloudGeometry(cloud.scale)} attach="geometry" />
-            <meshBasicMaterial color="#ffffff" transparent opacity={0.45} />
-          </mesh>
+          <Cloud key={i} x={cloud.x} y={cloud.y} z={cloud.z} />
         ))}
       </group>
 
