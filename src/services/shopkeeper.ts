@@ -19,7 +19,7 @@ export interface ShopkeeperResponse {
 }
 
 let _history: ShopkeeperMessage[] = []
-let _currentBackend: EmilioBackend = 'opus-distill'
+let _currentBackend: EmilioBackend = 'sonnet'
 
 export function getCurrentBackend(): EmilioBackend {
   return _currentBackend
