@@ -8,6 +8,8 @@ import { getActiveGameId, getGamePaths } from './game-context'
 import type { LoopState, LoopOptions, AnalysisResult, CodeChange } from '@/lib/types'
 import { generateNextObjective } from './planner'
 import { runGameTest } from './game-tester'
+import { getOndeFlowState } from './onde-flow-state'
+import { updateAppState } from '@/lib/app-registry'
 import { PGR_GAMEPLAY_SCENARIO } from './test-scenarios'
 
 // ── Singleton state (vive nel processo Next.js) ──
@@ -67,6 +69,14 @@ export function stopLoop() {
   _pendingApproval = false
   setState('idle')
   emit('log', 'Loop stopped by user')
+
+  // Mark active app as coder-stopped
+  try {
+    const ofState = getOndeFlowState()
+    if (ofState.activeApp) {
+      updateAppState(ofState.activeApp, { coderStopped: true, timestamp: new Date().toISOString() })
+    }
+  } catch { /* non-fatal */ }
 }
 
 export function approveChanges(approved: boolean) {
@@ -295,6 +305,21 @@ async function runOneIteration(iterNum: number, options: LoopOptions): Promise<b
 
   emit('done', `Iteration ${iterNum} complete`)
   emit('log', `=== ITERATION ${iterNum} COMPLETE ===`)
+
+  // Update active app STATE.json
+  try {
+    const ofState = getOndeFlowState()
+    if (ofState.activeApp) {
+      updateAppState(ofState.activeApp, {
+        lastIter: iterNum,
+        buildOk: buildResult.success,
+        lastChange: pmSummary || null,
+        coderStopped: false,
+        timestamp: new Date().toISOString(),
+      })
+    }
+  } catch { /* non-fatal */ }
+
   return true
 }
 

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 const NAV_ITEMS = [
-  { href: '/shop',      label: 'SHOP',      icon: '🏪' },
+  { href: '/emilio',    label: 'EMILIO',    icon: '~' },
   { href: '/games',     label: 'GAMES',     icon: '⊞' },
   { href: '/',          label: 'DASHBOARD', icon: '◈' },
   { href: '/loop',      label: 'LOOP',      icon: '⟳' },
@@ -61,7 +61,7 @@ export default function Sidebar() {
           color: 'var(--cyan)',
           textShadow: '0 0 12px rgba(0,212,255,0.6)',
         }}>
-          GAME WIZARD
+          ONDE-FLOW
         </div>
         <div style={{
           fontSize: '9px',
@@ -69,7 +69,7 @@ export default function Sidebar() {
           color: 'var(--text-dim)',
           marginTop: '3px',
         }}>
-          ONDE // v2.0
+          CREATIVE OS // v3.0
         </div>
       </div>
 

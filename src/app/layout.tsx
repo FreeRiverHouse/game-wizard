@@ -10,8 +10,8 @@ const mono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'GAME WIZARD // ONDE',
-  description: 'Self-improvement loop dashboard',
+  title: 'ONDE-FLOW // CREATIVE OS',
+  description: 'Emilio concierge · multi-app creative platform',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

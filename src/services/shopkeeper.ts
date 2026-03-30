@@ -8,28 +8,44 @@ export interface ShopkeeperMessage {
 
 export interface ShopkeeperResponse {
   reply: string
-  action?: 'create_game' | 'modify_game' | 'show_game' | null
+  action?: 'create_game' | 'modify_game' | 'show_game' | 'start_coder' | 'switch_app' | null
   gameDescription?: string
-  emotion?: 'neutral' | 'excited' | 'thinking' | 'proud'
+  coderPayload?: { app: string; tasks: string[]; plan: string }
+  switchApp?: string
+  emotion?: 'neutral' | 'excited' | 'thinking' | 'proud' | 'focused' | 'relaxed'
 }
 
 let _history: ShopkeeperMessage[] = []
 
-export async function chatWithShopkeeper(userMessage: string): Promise<ShopkeeperResponse> {
+export function buildSystemPrompt(appContext?: string): string {
+  const base = `Sei Emilio, il concierge di Onde-Flow — un creative OS che gestisce repo e progetti creativi. Hai un carattere napoletano appassionato. Aiuti l'utente a pianificare il lavoro e delegare al Coder.
+Azioni che puoi impostare:
+- create_game: quando l'utente vuole progettare un nuovo gioco
+- start_coder: quando l'utente vuole iniziare a programmare un piano. Imposta coderPayload con {app, tasks:string[], plan:string}
+- switch_app: quando l'utente menziona di voler passare a un altro progetto. Imposta switchApp=nomeApp
+Quando usi start_coder, tasks deve essere un array di task concreti.
+RISPONDI SEMPRE SOLO con JSON valido (no markdown): {"reply":"...","action":null,"emotion":"neutral","coderPayload":null,"switchApp":null,"gameDescription":null}
+Risposte brevi (1-3 frasi), calorose e con tocco napoletano. Rispondi in italiano.`
+
+  if (appContext) {
+    return `=== CONTESTO PROGETTI ===\n${appContext}\n=== FINE CONTESTO ===\n\n${base}`
+  }
+  return base
+}
+
+export async function chatWithShopkeeper(userMessage: string, appContext?: string): Promise<ShopkeeperResponse> {
   _history.push({ role: 'user', content: userMessage, timestamp: Date.now() })
 
   const convText = _history
-    .slice(0, -1) // exclude the message just added
+    .slice(0, -1)
     .map(m => `${m.role === 'user' ? 'User' : 'Emilio'}: ${m.content}`)
     .join('\n')
 
-  const fullPrompt = `You are Emilio, a passionate Neapolitan game shop owner. Italian flair. Help customers design games.
-When you have enough game details (name, genre, mechanic), set action to "create_game".
-ALWAYS reply ONLY with valid JSON (no markdown): {"reply":"...","action":null,"gameDescription":"...","emotion":"neutral|excited|thinking|proud"}
-Keep replies short (1-3 sentences), theatrical and Neapolitan.
+  const systemPrompt = buildSystemPrompt(appContext)
+  const fullPrompt = `${systemPrompt}
 
 ${convText ? convText + '\n' : ''}User: ${userMessage}
-Reply with JSON:`
+Rispondi con JSON:`
 
   try {
     const raw = execFileSync('claude', ['-p', fullPrompt], {
