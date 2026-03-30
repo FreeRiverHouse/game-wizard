@@ -21,6 +21,9 @@ interface ChatPanelProps {
   gpTotal: number
   onRunGP: () => void
   onStopGP: () => void
+  isVoiceRecording?: boolean
+  isVoiceProcessing?: boolean
+  onToggleVoice?: () => void
 }
 
 export default function ChatPanel({
@@ -39,7 +42,10 @@ export default function ChatPanel({
   gpStep,
   gpTotal,
   onRunGP,
-  onStopGP
+  onStopGP,
+  isVoiceRecording = false,
+  isVoiceProcessing = false,
+  onToggleVoice
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -128,7 +134,7 @@ export default function ChatPanel({
       {/* Coder Banner */}
       {ondeFlowMode === 'CODER_ACTIVE' && (
         <div style={{ background: 'rgba(255,170,0,0.1)', border: '1px solid rgba(255,170,0,0.3)', color: '#ffaa00', fontSize: 11, padding: '8px 16px', textAlign: 'center' }}>
-          ⚡ CODER IN ESECUZIONE
+          ⚡ CODER ACTIVE
         </div>
       )}
 
@@ -168,13 +174,28 @@ export default function ChatPanel({
       {/* Input Form */}
       <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(0,212,255,0.15)' }}>
         <form onSubmit={onSubmit} style={{ display: 'flex', gap: 8 }}>
+          {onToggleVoice && (
+            <button
+              type="button"
+              onClick={onToggleVoice}
+              style={{
+                background: isVoiceRecording ? 'rgba(255,50,50,0.2)' : isVoiceProcessing ? 'rgba(255,170,0,0.15)' : 'rgba(0,212,255,0.05)',
+                border: `1px solid ${isVoiceRecording ? '#ff3232' : isVoiceProcessing ? '#ffaa00' : 'rgba(0,212,255,0.3)'}`,
+                color: isVoiceRecording ? '#ff3232' : isVoiceProcessing ? '#ffaa00' : 'rgba(0,212,255,0.7)',
+                borderRadius: 6, padding: '8px 10px', fontSize: 15, cursor: 'pointer',
+                animation: isVoiceRecording ? 'pulse 1s infinite' : 'none'
+              }}
+            >
+              {isVoiceProcessing ? '⏳' : isVoiceRecording ? '🔴' : '🎙'}
+            </button>
+          )}
           <input
             type="text"
             value={inputValue}
             onChange={e => onInputChange(e.target.value)}
-            placeholder="Parla con Emilio..."
+            placeholder={isVoiceRecording ? '● Recording...' : isVoiceProcessing ? 'Processing...' : 'Talk to Emilio...'}
             disabled={isLoading}
-            style={{ flex: 1, background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: 6, padding: '8px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none' }}
+            style={{ flex: 1, background: 'rgba(0,0,0,0.4)', border: `1px solid ${isVoiceRecording ? 'rgba(255,50,50,0.4)' : 'rgba(0,212,255,0.3)'}`, borderRadius: 6, padding: '8px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none' }}
           />
           <button
             type="submit"

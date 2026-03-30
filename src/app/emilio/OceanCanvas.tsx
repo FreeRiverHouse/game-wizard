@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrthographicCamera } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette, ChromaticAberration } from '@react-three/postprocessing';
@@ -31,7 +32,9 @@ export default function OceanCanvas({ emotion }: OceanCanvasProps) {
       <OrthographicCamera makeDefault zoom={90} position={[0, 1, 5]} />
       <SceneEnvironment />
       <OceanMesh />
-      <EmilioCharacter emotion={safeEmotion} />
+      <Suspense fallback={null}>
+        <EmilioCharacter emotion={safeEmotion} />
+      </Suspense>
       <EffectComposer>
         <Bloom luminanceThreshold={0.6} luminanceSmoothing={0.9} intensity={0.4} />
         <Vignette eskil={false} offset={0.15} darkness={0.6} />

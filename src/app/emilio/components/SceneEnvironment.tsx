@@ -187,7 +187,7 @@ export default function SceneEnvironment() {
             ]}
           >
             <circleGeometry args={[0.015 + Math.random() * 0.02, 8]} />
-            <meshBasicMaterial color="rgba(255,255,255,0.8)" transparent opacity={0.7 + Math.random() * 0.3} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.7 + Math.random() * 0.3} />
           </mesh>
         ))}
       </group>

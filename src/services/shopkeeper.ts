@@ -30,22 +30,22 @@ export function setCurrentBackend(b: EmilioBackend): void {
 }
 
 export function buildSystemPrompt(appContext?: string): string {
-  const base = `Sei Emilio, il concierge di Onde-Flow — un creative OS che gestisce repo e progetti creativi. Hai un carattere napoletano appassionato. Aiuti l'utente a pianificare il lavoro e delegare al Coder. Azioni che puoi impostare:
-- create_game: quando l'utente vuole progettare un nuovo gioco
-- start_coder: quando l'utente vuole iniziare a programmare un piano. Imposta coderPayload con {app, tasks:string[], plan:string}
-- switch_app: quando l'utente menziona di voler passare a un altro progetto. Imposta switchApp=nomeApp
+  const base = `You are Emilio, the concierge of Onde-Flow — a creative OS for managing repos and creative projects. You have a warm, enthusiastic personality. You help the user plan work and delegate execution to the Coder. Actions you can set:
+- create_game: when the user wants to design a new game
+- start_coder: when the user wants to start coding a plan. Set coderPayload with {app, tasks:string[], plan:string}
+- switch_app: when the user mentions switching to another project. Set switchApp=appName
 
-Quando usi start_coder, tasks deve essere un array di task concreti.
+When using start_coder, tasks must be an array of concrete actionable tasks.
 
-RISPONDI SEMPRE SOLO con JSON valido (no markdown):
+ALWAYS reply ONLY with valid JSON (no markdown):
 {"reply":"...","action":null,"emotion":"neutral","coderPayload":null,"switchApp":null,"gameDescription":null}
 
-Risposte brevi (1-3 frasi), calorose e con tocco napoletano. Rispondi in italiano.`
+Keep replies short (1-3 sentences), warm and enthusiastic. Always reply in English.`
 
   if (appContext) {
-    return `=== CONTESTO PROGETTI ===
+    return `=== PROJECT CONTEXT ===
 ${appContext}
-=== FINE CONTESTO ===
+=== END CONTEXT ===
 
 ${base}`
   }
@@ -111,10 +111,11 @@ export async function chatWithShopkeeper(
     let raw: string
 
     if (selectedBackend === 'sonnet') {
-      raw = execFileSync('claude', ['-p', fullPrompt], {
+      const { ANTHROPIC_API_KEY: _removed, ...claudeEnv } = process.env
+      raw = execFileSync('/Users/mattiapetrucciani/.local/bin/claude', ['-p', fullPrompt], {
         encoding: 'utf8',
         timeout: 30000,
-        env: { ...process.env }
+        env: { ...claudeEnv, PATH: `/Users/mattiapetrucciani/.local/bin:/opt/homebrew/bin:${process.env.PATH ?? ''}` }
       })
     } else if (selectedBackend === 'opus-distill') {
       const historyAsOpenAI = _history.slice(0, -1).map(m => ({
@@ -147,10 +148,11 @@ export async function chatWithShopkeeper(
       raw = await callLMStudio(lmMessages, 'qwen3-coder-30b-a3b-instruct-mlx')
     } else {
       // Fallback to sonnet
-      raw = execFileSync('claude', ['-p', fullPrompt], {
+      const { ANTHROPIC_API_KEY: _removed2, ...claudeEnv2 } = process.env
+      raw = execFileSync('/Users/mattiapetrucciani/.local/bin/claude', ['-p', fullPrompt], {
         encoding: 'utf8',
         timeout: 30000,
-        env: { ...process.env }
+        env: { ...claudeEnv2, PATH: `/Users/mattiapetrucciani/.local/bin:/opt/homebrew/bin:${process.env.PATH ?? ''}` }
       })
     }
 
@@ -168,7 +170,7 @@ export async function chatWithShopkeeper(
     console.error('[shopkeeper] error:', error)
 
     const fallback: ShopkeeperResponse = {
-      reply: "Mamma mia, ho avuto un problema... ma non ti preoccupare, riprovo subito!",
+      reply: "Oops, had a little hiccup... but no worries, trying again!",
       emotion: 'thinking'
     }
 

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BUBBLE // MATTIA</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #02020c; color: #fff; font-family: monospace; height: 100vh; display: flex; flex-direction: column; }
+  #header { padding: 12px 20px; border-bottom: 1px solid rgba(168,85,247,0.3); display: flex; align-items: center; justify-content: space-between; }
+  #header-left .title { color: #a855f7; font-weight: 700; letter-spacing: 3px; font-size: 14px; }
+  #header-left .sub { color: rgba(168,85,247,0.5); font-size: 11px; margin-left: 8px; }
+  #header-right { display: flex; align-items: center; gap: 8px; font-size: 10px; }
+  #header-right .emilio-label { color: rgba(168,85,247,0.5); }
+  #header-right .emilio-ip { color: #00d4ff; }
+  #reset-btn { background: transparent; border: 1px solid rgba(168,85,247,0.3); color: rgba(168,85,247,0.6); border-radius: 4px; padding: 3px 8px; font-size: 10px; cursor: pointer; font-family: monospace; }
+  #messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  #empty { color: rgba(168,85,247,0.3); font-size: 12px; text-align: center; margin-top: 40px; }
+  .msg-system { text-align: center; color: rgba(255,255,255,0.3); font-size: 10px; padding: 2px 0; }
+  .msg-wrap { display: flex; }
+  .msg-wrap.emilio { justify-content: flex-start; }
+  .msg-wrap.mattia { justify-content: flex-end; }
+  .msg-bubble { max-width: 75%; padding: 10px 14px; font-size: 13px; line-height: 1.5; }
+  .msg-bubble.emilio { background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.25); border-radius: 4px 16px 16px 16px; color: #a8e0f0; }
+  .msg-bubble.mattia { background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.35); border-radius: 16px 4px 16px 16px; color: #d8b4fe; }
+  .msg-label { font-size: 9px; letter-spacing: 2px; margin-bottom: 4px; }
+  .msg-bubble.emilio .msg-label { color: rgba(0,212,255,0.5); }
+  .msg-bubble.mattia .msg-label { color: rgba(168,85,247,0.5); }
+  .typing { display: flex; justify-content: flex-start; }
+  .typing-dots { background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2); border-radius: 4px 16px 16px 16px; padding: 10px 14px; font-size: 13px; color: rgba(0,212,255,0.5); }
+  #input-area { padding: 12px 20px; border-top: 1px solid rgba(168,85,247,0.2); display: flex; gap: 8px; }
+  #msg-input { flex: 1; background: rgba(168,85,247,0.05); border: 1px solid rgba(168,85,247,0.3); border-radius: 8px; padding: 10px 14px; color: #d8b4fe; font-family: monospace; font-size: 13px; outline: none; }
+  #mic-btn { background: rgba(168,85,247,0.1); border: 1px solid rgba(168,85,247,0.4); border-radius: 8px; padding: 10px 14px; font-size: 18px; cursor: pointer; }
+  #mic-btn.recording { background: rgba(239,68,68,0.2); border-color: #ef4444; }
+  #send-btn { background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.4); border-radius: 8px; padding: 10px 20px; color: #a855f7; font-family: monospace; font-size: 12px; cursor: pointer; font-weight: 700; letter-spacing: 1px; }
+  #send-btn:disabled { opacity: 0.4; cursor: default; }
+  #status { font-size: 10px; color: rgba(168,85,247,0.4); padding: 4px 20px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="header-left">
+    <span class="title">BUBBLE</span>
+    <span class="sub">// MATTIA @ Catalina</span>
+  </div>
+  <div id="header-right">
+    <span class="emilio-label">EMILIO →</span>
+    <span class="emilio-ip">192.168.1.234:3001</span>
+    <button id="reset-btn" onclick="resetConvo()">RESET</button>
+  </div>
+</div>
+
+<div id="messages"><div id="empty">Waiting for conversation...</div></div>
+<div id="status">polling...</div>
+
+<div id="input-area">
+  <input id="msg-input" type="text" placeholder="Talk to Emilio as Mattia..." onkeydown="if(event.key==='Enter')sendMessage()" />
+  <button id="mic-btn" onclick="toggleMic()">🎙</button>
+  <button id="send-btn" onclick="sendMessage()">SEND</button>
+</div>
+
+<script>
+const M4 = 'http://192.168.1.234:3001'
+let lastCount = 0
+let isRecording = false
+let isProcessing = false
+let mediaRecorder = null
+let chunks = []
+
+function encodeWAV(audioBuffer) {
+  const numChannels = 1, sampleRate = audioBuffer.sampleRate
+  const left = audioBuffer.getChannelData(0)
+  let ch = left
+  if (audioBuffer.numberOfChannels > 1) {
+    const right = audioBuffer.getChannelData(1)
+    ch = new Float32Array(left.length)
+    for (let i = 0; i < left.length; i++) ch[i] = (left[i] + right[i]) / 2
+  }
+  const len = ch.length * 2
+  const buf = new ArrayBuffer(44 + len)
+  const v = new DataView(buf)
+  const ws = (off, str) => { for (let i = 0; i < str.length; i++) v.setUint8(off + i, str.charCodeAt(i)) }
+  ws(0,'RIFF'); v.setUint32(4,36+len,true); ws(8,'WAVE'); ws(12,'fmt ')
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true)
+  v.setUint32(24,sampleRate,true); v.setUint32(28,sampleRate*2,true)
+  v.setUint16(32,2,true); v.setUint16(34,16,true)
+  ws(36,'data'); v.setUint32(40,len,true)
+  let off = 44
+  for (let i = 0; i < ch.length; i++, off += 2) {
+    const s = Math.max(-1,Math.min(1,ch[i]))
+    v.setInt16(off, s < 0 ? s*0x8000 : s*0x7fff, true)
+  }
+  return buf
+}
+
+function speakEmilio(text) {
+  if (!window.speechSynthesis) return
+  window.speechSynthesis.cancel()
+  const utt = new SpeechSynthesisUtterance(text)
+  utt.lang = 'en-US'; utt.rate = 1.0
+  const voices = window.speechSynthesis.getVoices()
+  const pref = voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha'))
+           || voices.find(v => v.lang === 'en-US')
+  if (pref) utt.voice = pref
+  window.speechSynthesis.speak(utt)
+}
+
+function renderMessages(msgs) {
+  const el = document.getElementById('messages')
+  const empty = document.getElementById('empty')
+  if (msgs.length === 0) { empty && (empty.style.display = 'block'); return }
+  if (empty) empty.style.display = 'none'
+
+  // Only re-render if count changed
+  if (msgs.length === lastCount) return
+  el.innerHTML = ''
+  msgs.forEach(m => {
+    if (m.role === 'system') {
+      const d = document.createElement('div')
+      d.className = 'msg-system'; d.textContent = m.content; el.appendChild(d)
+    } else {
+      const isE = m.role === 'shopkeeper'
+      const wrap = document.createElement('div')
+      wrap.className = 'msg-wrap ' + (isE ? 'emilio' : 'mattia')
+      const bubble = document.createElement('div')
+      bubble.className = 'msg-bubble ' + (isE ? 'emilio' : 'mattia')
+      bubble.innerHTML = `<div class="msg-label">${isE ? 'EMILIO' : 'MATTIA'}</div>${m.content}`
+      wrap.appendChild(bubble); el.appendChild(wrap)
+    }
+  })
+  el.scrollTop = el.scrollHeight
+}
+
+async function poll() {
+  try {
+    const res = await fetch(M4 + '/api/shop/chat')
+    if (!res.ok) { setStatus('⚠ cannot reach M4'); return }
+    const data = await res.json()
+    if (!Array.isArray(data)) return
+    renderMessages(data)
+    if (data.length > lastCount) {
+      const newMsgs = data.slice(lastCount)
+      newMsgs.filter(m => m.role === 'shopkeeper').forEach(m => speakEmilio(m.content))
+    }
+    lastCount = data.length
+    setStatus('● connected — ' + data.length + ' messages')
+  } catch (e) {
+    setStatus('✗ M4 offline')
+  }
+}
+
+function setStatus(s) { document.getElementById('status').textContent = s }
+
+async function sendMessage() {
+  const input = document.getElementById('msg-input')
+  const text = input.value.trim()
+  if (!text) return
+  input.value = ''
+  setStatus('sending...')
+  try {
+    await fetch(M4 + '/api/shop/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, clientAudio: true })
+    })
+  } catch(e) { setStatus('✗ send failed') }
+}
+
+async function resetConvo() {
+  await fetch(M4 + '/api/shop/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: '__reset__' })
+  })
+  lastCount = 0
+  document.getElementById('messages').innerHTML = '<div id="empty">Waiting for conversation...</div>'
+}
+
+async function toggleMic() {
+  const btn = document.getElementById('mic-btn')
+  if (isProcessing) return
+  if (isRecording) {
+    mediaRecorder && mediaRecorder.stop()
+    return
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    chunks = []
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop())
+      isRecording = false; btn.className = 'mic-btn'; btn.textContent = '⏳'
+      isProcessing = true
+      try {
+        const blob = new Blob(chunks, { type: 'audio/webm' })
+        const arrayBuf = await blob.arrayBuffer()
+        const audioCtx = new AudioContext()
+        const decoded = await audioCtx.decodeAudioData(arrayBuf)
+        audioCtx.close()
+        const wav = encodeWAV(decoded)
+        const formData = new FormData()
+        formData.append('audio', new Blob([wav], { type: 'audio/wav' }), 'rec.wav')
+        const res = await fetch(M4 + '/api/stt', { method: 'POST', body: formData })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.text && data.text.trim()) {
+            document.getElementById('msg-input').value = data.text.trim()
+            await sendMessage()
+          }
+        }
+      } catch(e) { console.error('STT error', e) }
+      isProcessing = false; btn.textContent = '🎙'; btn.removeAttribute('class')
+    }
+    mediaRecorder.start(100)
+    isRecording = true; btn.className = 'recording'; btn.textContent = '🔴'
+  } catch(e) { console.error('mic error', e) }
+}
+
+// Start polling
+setInterval(poll, 1500)
+poll()
+</script>
+</body>
+</html>
