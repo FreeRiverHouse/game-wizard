@@ -114,7 +114,7 @@ export async function chatWithShopkeeper(
       const { ANTHROPIC_API_KEY: _removed, ...claudeEnv } = process.env
       raw = execFileSync('/Users/mattiapetrucciani/.local/bin/claude', ['-p', fullPrompt], {
         encoding: 'utf8',
-        timeout: 30000,
+        timeout: 60000,
         env: { ...claudeEnv, PATH: `/Users/mattiapetrucciani/.local/bin:/opt/homebrew/bin:${process.env.PATH ?? ''}` }
       })
     } else if (selectedBackend === 'opus-distill') {
@@ -151,7 +151,7 @@ export async function chatWithShopkeeper(
       const { ANTHROPIC_API_KEY: _removed2, ...claudeEnv2 } = process.env
       raw = execFileSync('/Users/mattiapetrucciani/.local/bin/claude', ['-p', fullPrompt], {
         encoding: 'utf8',
-        timeout: 30000,
+        timeout: 60000,
         env: { ...claudeEnv2, PATH: `/Users/mattiapetrucciani/.local/bin:/opt/homebrew/bin:${process.env.PATH ?? ''}` }
       })
     }

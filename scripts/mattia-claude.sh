@@ -66,7 +66,7 @@ Emilio: $EMILIO_REPLY"
   fi
 
   echo ""
-  [ $i -lt $TURNS ] && sleep 2
+  [ $i -lt $TURNS ] && sleep 4
 done
 
 echo "========================================="
